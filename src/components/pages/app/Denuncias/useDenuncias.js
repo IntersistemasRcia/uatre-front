@@ -52,6 +52,9 @@ const useDenuncias = ({
   filtroDerivadoAId = null,
   filtroDelegacionId = null,
   bloqueado = false,
+  filtroDelegacionOrigenId = null,
+  filtroSeccionalOrigenId = null,
+  localidadOrigenMap = null,
 } = {}) => {
 
 
@@ -225,6 +228,17 @@ const useDenuncias = ({
                   });
                 }
 
+                // REQ-1118: filtro por Delegación/Seccional de origen (asignadas al registrar la denuncia)
+                if ((filtroDelegacionOrigenId || filtroSeccionalOrigenId) && localidadOrigenMap) {
+                  dataConEstados = dataConEstados.filter((d) => {
+                    const localidadId = Number(d.localidadId ?? d.LocalidadId ?? 0);
+                    const origen = localidadOrigenMap.get(localidadId) || {};
+                    if (filtroDelegacionOrigenId && Number(origen.delegacionId) !== Number(filtroDelegacionOrigenId)) return false;
+                    if (filtroSeccionalOrigenId && Number(origen.seccionalId) !== Number(filtroSeccionalOrigenId)) return false;
+                    return true;
+                  });
+                }
+
                 // ✅ ORDENAR POR FECHA DESCENDENTE (más nueva primero)
                 const dataOrdenada = dataConEstados.sort((a, b) => {
                   const fechaA = new Date(a.fecha || a.fechaEstado || '1900-01-01');
@@ -291,6 +305,9 @@ const useDenuncias = ({
     filtroDerivadoATipo,
     filtroDerivadoAId,
     filtroDelegacionId,
+    filtroDelegacionOrigenId,
+    filtroSeccionalOrigenId,
+    localidadOrigenMap,
   ]);
 
   //  ACTIVAR LOADING CUANDO CAMBIEN LOS FILTROS
@@ -311,6 +328,9 @@ const useDenuncias = ({
     filtroDerivadoATipo,
     filtroDerivadoAId,
     filtroDelegacionId,
+    filtroDelegacionOrigenId,
+    filtroSeccionalOrigenId,
+    localidadOrigenMap,
   ]);
 
   const request = useCallback((type, payload = {}) => {
