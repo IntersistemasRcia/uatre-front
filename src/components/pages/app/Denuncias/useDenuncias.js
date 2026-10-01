@@ -54,6 +54,7 @@ const useDenuncias = ({
   bloqueado = false,
   filtroDelegacionOrigenId = null,
   filtroSeccionalOrigenId = null,
+  seccionalOrigenMap = null,
   localidadOrigenMap = null,
 } = {}) => {
 
@@ -228,13 +229,16 @@ const useDenuncias = ({
                   });
                 }
 
-                // REQ-1118: filtro por Delegación/Seccional de origen (asignadas al registrar la denuncia)
-                if ((filtroDelegacionOrigenId || filtroSeccionalOrigenId) && localidadOrigenMap) {
+                // REQ-1118: el código de seccional es el origen asignado al registrar.
+                // Las denuncias históricas sin código usan la relación de localidad como respaldo.
+                if ((filtroDelegacionOrigenId || filtroSeccionalOrigenId) && (seccionalOrigenMap || localidadOrigenMap)) {
                   dataConEstados = dataConEstados.filter((d) => {
+                    const seccionalCodigo = String(d.seccionalCodigo ?? d.SeccionalCodigo ?? "").trim().toUpperCase();
                     const localidadId = Number(d.localidadId ?? d.LocalidadId ?? 0);
-                    const origen = localidadOrigenMap.get(localidadId) || {};
-                    if (filtroDelegacionOrigenId && Number(origen.delegacionId) !== Number(filtroDelegacionOrigenId)) return false;
-                    if (filtroSeccionalOrigenId && Number(origen.seccionalId) !== Number(filtroSeccionalOrigenId)) return false;
+                    const origen = seccionalOrigenMap?.get(seccionalCodigo)
+                      || localidadOrigenMap?.get(localidadId);
+                    if (filtroDelegacionOrigenId && !origen?.delegacionIds?.has(Number(filtroDelegacionOrigenId))) return false;
+                    if (filtroSeccionalOrigenId && !origen?.seccionalIds?.has(Number(filtroSeccionalOrigenId))) return false;
                     return true;
                   });
                 }
@@ -307,6 +311,7 @@ const useDenuncias = ({
     filtroDelegacionId,
     filtroDelegacionOrigenId,
     filtroSeccionalOrigenId,
+    seccionalOrigenMap,
     localidadOrigenMap,
   ]);
 
@@ -330,6 +335,7 @@ const useDenuncias = ({
     filtroDelegacionId,
     filtroDelegacionOrigenId,
     filtroSeccionalOrigenId,
+    seccionalOrigenMap,
     localidadOrigenMap,
   ]);
 

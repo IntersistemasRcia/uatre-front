@@ -703,11 +703,25 @@ const DenunciasHandler = () => {
     selected: seccionalOrigenTodos,
   });
 
-  // Mapa localidadId -> {delegacionId, seccionalId} de origen, resuelto en cliente.
-  // El catálogo /Afiliaciones/Seccional (seccionalSelect.data, ya cargado para el
-  // filtro de derivación) trae por cada seccional un array anidado "seccionalLocalidad"
-  // con refLocalidadId/seccionalId/refDelegacionId: alcanza con invertirlo, sin pedir
-  // nada nuevo al backend.
+  // La denuncia conserva el código de la seccional asignada durante la registración.
+  // Es la fuente principal para no recalcular el origen a partir del catálogo actual.
+  const seccionalOrigenMap = useMemo(() => {
+    const map = new Map();
+    for (const opt of seccionalSelect.data) {
+      const codigo = String(opt.record?.codigo ?? "").trim().toUpperCase();
+      const seccionalId = Number(opt.value);
+      const delegacionId = Number(opt.record?.refDelegacionId) || null;
+      if (!codigo || !seccionalId) continue;
+      map.set(codigo, {
+        seccionalIds: new Set([seccionalId]),
+        delegacionIds: new Set(delegacionId ? [delegacionId] : []),
+      });
+    }
+    return map;
+  }, [seccionalSelect.data]);
+
+  // Respaldo para denuncias históricas que no informan seccionalCodigo. Una localidad
+  // puede estar relacionada con más de una seccional, por lo que se preservan todas.
   const localidadOrigenMap = useMemo(() => {
     const map = new Map();
     for (const opt of seccionalSelect.data) {
@@ -717,7 +731,13 @@ const DenunciasHandler = () => {
       for (const loc of localidades) {
         const localidadId = Number(loc.refLocalidadId ?? loc.RefLocalidadId ?? loc.id);
         if (!localidadId) continue;
-        map.set(localidadId, { seccionalId, delegacionId });
+        const origen = map.get(localidadId) || {
+          seccionalIds: new Set(),
+          delegacionIds: new Set(),
+        };
+        origen.seccionalIds.add(seccionalId);
+        if (delegacionId) origen.delegacionIds.add(delegacionId);
+        map.set(localidadId, origen);
       }
     }
     return map;
@@ -882,6 +902,7 @@ const DenunciasHandler = () => {
     })(),
     filtroDelegacionOrigenId: appliedFilters.delegacionOrigenId || null,
     filtroSeccionalOrigenId: appliedFilters.seccionalOrigenId || null,
+    seccionalOrigenMap: seccionalOrigenMap,
     localidadOrigenMap: localidadOrigenMap,
     usuarioAmbito: usuarioAmbito,
     applyAmbitoFilter: applyAmbitoFilter, //  función de filtrado por ámbito
@@ -1116,7 +1137,11 @@ const DenunciasHandler = () => {
           <SearchSelectMaterial
             label="Delegación de Denuncia"
             value={delegacionOrigenSelect.selected}
-            onChange={(selected = delegacionOrigenTodos) => setDelegacionOrigenSelect(o => ({ ...o, selected }))}
+            onChange={(selected = delegacionOrigenTodos) => {
+              setDelegacionOrigenSelect(o => ({ ...o, selected }));
+              // RN-010: toda modificación de Delegación limpia la Seccional de origen.
+              setSeccionalOrigenSelect(o => ({ ...o, selected: seccionalOrigenTodos, buscar: "" }));
+            }}
             options={delegacionOrigenSelect.options}
             onTextChange={(buscar) => setDelegacionOrigenSelect(o => ({ ...o, buscar }))}
           />
