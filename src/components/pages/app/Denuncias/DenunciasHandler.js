@@ -1143,14 +1143,24 @@ const DenunciasHandler = () => {
               setSeccionalOrigenSelect(o => ({ ...o, selected: seccionalOrigenTodos, buscar: "" }));
             }}
             options={delegacionOrigenSelect.options}
-            onTextChange={(buscar) => setDelegacionOrigenSelect(o => ({ ...o, buscar }))}
+            onInputChange={(buscar, reason) => {
+              if (reason === "input" || reason === "clear") {
+                setDelegacionOrigenSelect(o => ({ ...o, buscar }));
+              }
+            }}
+            autocompleteProps={{ filterOptions: (options) => options }}
           />
           <SearchSelectMaterial
             label="Seccional de Denuncia"
             value={seccionalOrigenSelect.selected}
-            onChange={(selected = seccionalOrigenTodos) => setSeccionalOrigenSelect(o => ({ ...o, selected }))}
+            onChange={(selected = seccionalOrigenTodos) => setSeccionalOrigenSelect(o => ({ ...o, selected, buscar: "" }))}
             options={seccionalOrigenSelect.options}
-            onTextChange={(buscar) => setSeccionalOrigenSelect(o => ({ ...o, buscar }))}
+            onInputChange={(buscar, reason) => {
+              if (reason === "input" || reason === "clear") {
+                setSeccionalOrigenSelect(o => ({ ...o, buscar }));
+              }
+            }}
+            autocompleteProps={{ filterOptions: (options) => options }}
           />
 
 
