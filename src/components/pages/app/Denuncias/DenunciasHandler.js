@@ -786,12 +786,20 @@ const DenunciasHandler = () => {
       const localidades = Array.isArray(opt.record?.seccionalLocalidad) ? opt.record.seccionalLocalidad : [];
       for (const loc of localidades) {
         const localidadId = Number(loc.refLocalidadId ?? loc.RefLocalidadId ?? loc.id);
-        if (!localidadId || map.has(localidadId)) continue;
-        map.set(localidadId, {
+        if (!localidadId) continue;
+        const localidad = map.get(localidadId) ?? {
           value: localidadId,
           label: `${loc.nombre} - ${loc.codPostal}`,
-          record: { seccionalId, delegacionId, codPostal: loc.codPostal, nombre: loc.nombre },
-        });
+          record: {
+            seccionalIds: new Set(),
+            delegacionIds: new Set(),
+            codPostal: loc.codPostal,
+            nombre: loc.nombre,
+          },
+        };
+        localidad.record.seccionalIds.add(seccionalId);
+        if (delegacionId) localidad.record.delegacionIds.add(delegacionId);
+        map.set(localidadId, localidad);
       }
     }
     return Array.from(map.values());
@@ -803,8 +811,8 @@ const DenunciasHandler = () => {
     let base = localidadCatalog;
     const delegId = delegacionSelect.selected?.value;
     const seccId = seccionalSelect.selected?.value;
-    if (delegId) base = base.filter(opt => Number(opt.record?.delegacionId) === Number(delegId));
-    if (seccId) base = base.filter(opt => Number(opt.record?.seccionalId) === Number(seccId));
+    if (delegId) base = base.filter(opt => opt.record?.delegacionIds?.has(Number(delegId)));
+    if (seccId) base = base.filter(opt => opt.record?.seccionalIds?.has(Number(seccId)));
     const buscar = localidadSelect.buscar.trim().toLowerCase();
     if (buscar) {
       base = base.filter(opt =>
