@@ -56,6 +56,8 @@ const useDenuncias = ({
   filtroSeccionalOrigenId = null,
   seccionalOrigenMap = null,
   localidadOrigenMap = null,
+  filtroLocalidadId = null,
+  filtroNumeroSeguimiento = null,
 } = {}) => {
 
 
@@ -243,6 +245,18 @@ const useDenuncias = ({
                   });
                 }
 
+                // AF E1ulKugD: filtro por Localidad (comparación directa contra localidadId de la denuncia)
+                if (filtroLocalidadId) {
+                  const target = Number(filtroLocalidadId);
+                  dataConEstados = dataConEstados.filter((d) => Number(d.localidadId ?? d.LocalidadId ?? 0) === target);
+                }
+
+                // AF E1ulKugD: filtro por Número de seguimiento de la denuncia.
+                if (filtroNumeroSeguimiento) {
+                  const target = Number(filtroNumeroSeguimiento);
+                  dataConEstados = dataConEstados.filter((d) => Number(d.numeroSeguimiento) === target);
+                }
+
                 // ✅ ORDENAR POR FECHA DESCENDENTE (más nueva primero)
                 const dataOrdenada = dataConEstados.sort((a, b) => {
                   const fechaA = new Date(a.fecha || a.fechaEstado || '1900-01-01');
@@ -313,6 +327,8 @@ const useDenuncias = ({
     filtroSeccionalOrigenId,
     seccionalOrigenMap,
     localidadOrigenMap,
+    filtroLocalidadId,
+    filtroNumeroSeguimiento,
   ]);
 
   //  ACTIVAR LOADING CUANDO CAMBIEN LOS FILTROS
@@ -337,6 +353,8 @@ const useDenuncias = ({
     filtroSeccionalOrigenId,
     seccionalOrigenMap,
     localidadOrigenMap,
+    filtroLocalidadId,
+    filtroNumeroSeguimiento,
   ]);
 
   const request = useCallback((type, payload = {}) => {

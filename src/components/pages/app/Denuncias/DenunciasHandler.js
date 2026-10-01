@@ -19,7 +19,7 @@ import useGeneracionExcel from "components/hooks/useGeneracionExcel";
 import useTareasUsuario from "components/hooks/useTareasUsuario";
 import useAmbitosUsuario from "components/hooks/useAmbitos";
 import ExportModal from "./ExportModal";
-// import InputMaterial from "components/ui/Input/InputMaterial";
+import InputMaterial from "components/ui/Input/InputMaterial";
 
 const DenunciasHandler = () => {
   const dispatch = useDispatch();
@@ -556,6 +556,8 @@ const DenunciasHandler = () => {
     delegacionId: null,
     delegacionOrigenId: null,
     seccionalOrigenId: null,
+    localidadId: null,
+    numeroSeguimiento: null,
   }));
 
   const delegacionTodos = useMemo(() => ({ value: null, label: "Todas las delegaciones" }), []);
@@ -759,6 +761,76 @@ const DenunciasHandler = () => {
     setSeccionalOrigenSelect(o => ({ ...o, options, selected: stillExists ? o.selected : seccionalOrigenTodos }));
   }, [seccionalOrigenSelect.buscar, seccionalSelect.data, delegacionOrigenSelect.selected, seccionalOrigenSelect.selected?.value, seccionalOrigenTodos]);
 
+  // ==============================
+  // AF E1ulKugD: filtros "Localidad" y "Número de seguimiento"
+  // Localidad depende del par histórico Delegación/Seccional (derivación),
+  // no del de origen (REQ-1118) — confirmado con el área funcional.
+  // ==============================
+  const localidadTodos = useMemo(() => ({ value: null, label: "Todas las Localidades" }), []);
+
+  const [localidadSelect, setLocalidadSelect] = useState({
+    buscar: "",
+    options: [],
+    selected: localidadTodos,
+  });
+
+  const [numeroSeguimiento, setNumeroSeguimiento] = useState("");
+
+  // Catálogo de Localidades (Nombre + CP), aplanado del mismo catálogo de
+  // Seccionales ya cargado (seccionalSelect.data) — sin pedir nada nuevo al backend.
+  const localidadCatalog = useMemo(() => {
+    const map = new Map();
+    for (const opt of seccionalSelect.data) {
+      const seccionalId = Number(opt.value);
+      const delegacionId = Number(opt.record?.refDelegacionId) || null;
+      const localidades = Array.isArray(opt.record?.seccionalLocalidad) ? opt.record.seccionalLocalidad : [];
+      for (const loc of localidades) {
+        const localidadId = Number(loc.refLocalidadId ?? loc.RefLocalidadId ?? loc.id);
+        if (!localidadId) continue;
+        const localidad = map.get(localidadId) ?? {
+          value: localidadId,
+          label: `${loc.nombre} - ${loc.codPostal}`,
+          record: {
+            seccionalIds: new Set(),
+            delegacionIds: new Set(),
+            codPostal: loc.codPostal,
+            nombre: loc.nombre,
+          },
+        };
+        localidad.record.seccionalIds.add(seccionalId);
+        if (delegacionId) localidad.record.delegacionIds.add(delegacionId);
+        map.set(localidadId, localidad);
+      }
+    }
+    return Array.from(map.values());
+  }, [seccionalSelect.data]);
+
+  // Búsqueda y filtrado de Localidad por Delegación y/o Seccional (histórico).
+  // Búsqueda por nombre O por Código Postal (RN-003).
+  useEffect(() => {
+    let base = localidadCatalog;
+    const delegId = delegacionSelect.selected?.value;
+    const seccId = seccionalSelect.selected?.value;
+    if (delegId) base = base.filter(opt => opt.record?.delegacionIds?.has(Number(delegId)));
+    if (seccId) base = base.filter(opt => opt.record?.seccionalIds?.has(Number(seccId)));
+    const buscar = localidadSelect.buscar.trim().toLowerCase();
+    if (buscar) {
+      base = base.filter(opt =>
+        String(opt.record?.nombre || "").toLowerCase().includes(buscar) ||
+        String(opt.record?.codPostal || "").toLowerCase().includes(buscar)
+      );
+    }
+    const options = [localidadTodos, ...base];
+    setLocalidadSelect(o => ({ ...o, options }));
+  }, [localidadCatalog, localidadSelect.buscar, delegacionSelect.selected, seccionalSelect.selected, localidadTodos]);
+
+  // RN-005/EX-003: al cambiar Delegación o Seccional (histórico), Localidad
+  // vuelve siempre a "Todas las Localidades" — a diferencia del patrón de
+  // Seccional-por-Delegación, acá NO se mantiene la selección aunque siga siendo válida.
+  useEffect(() => {
+    setLocalidadSelect(o => ({ ...o, selected: localidadTodos, buscar: "" }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [delegacionSelect.selected?.value, seccionalSelect.selected?.value]);
 
   // ==============================
   // Exportar a Excel
@@ -904,6 +976,8 @@ const DenunciasHandler = () => {
     filtroSeccionalOrigenId: appliedFilters.seccionalOrigenId || null,
     seccionalOrigenMap: seccionalOrigenMap,
     localidadOrigenMap: localidadOrigenMap,
+    filtroLocalidadId: appliedFilters.localidadId || null,
+    filtroNumeroSeguimiento: appliedFilters.numeroSeguimiento || null,
     usuarioAmbito: usuarioAmbito,
     applyAmbitoFilter: applyAmbitoFilter, //  función de filtrado por ámbito
     bloqueado: false,
@@ -1133,6 +1207,19 @@ const DenunciasHandler = () => {
             disabled={disabledSeccional}
             style={{ opacity: disabledSeccional ? 0.6 : 1 }}
           />
+          <SearchSelectMaterial
+            label="Localidad"
+            value={localidadSelect.selected}
+            onChange={(selected = localidadTodos) => setLocalidadSelect(o => ({ ...o, selected }))}
+            options={localidadSelect.options}
+            onTextChange={(buscar) => setLocalidadSelect(o => ({ ...o, buscar }))}
+          />
+          <InputMaterial
+            label="Número de seguimiento"
+            type="number"
+            value={numeroSeguimiento}
+            onChange={(value) => setNumeroSeguimiento(value)}
+          />
 
           <SearchSelectMaterial
             label="Delegación de Denuncia"
@@ -1218,6 +1305,10 @@ const DenunciasHandler = () => {
                 seccionalOrigenId: seccionalOrigenSelect.selected?.value
                   ? Number(seccionalOrigenSelect.selected.value)
                   : null,
+                localidadId: localidadSelect.selected?.value
+                  ? Number(localidadSelect.selected.value)
+                  : null,
+                numeroSeguimiento: numeroSeguimiento ? Number(numeroSeguimiento) : null,
               });
             }}
            >
@@ -1240,7 +1331,9 @@ const DenunciasHandler = () => {
               !filtroDelegacionValue &&
               !filtroSeccionalValue &&
               !delegacionOrigenSelect.selected?.value &&
-              !seccionalOrigenSelect.selected?.value
+              !seccionalOrigenSelect.selected?.value &&
+              !localidadSelect.selected?.value &&
+              !numeroSeguimiento
               )
             }
             onClick={() => {
@@ -1291,6 +1384,8 @@ const DenunciasHandler = () => {
 
               setDelegacionOrigenSelect((o) => ({ ...o, selected: delegacionOrigenTodos, buscar: "" }));
               setSeccionalOrigenSelect((o) => ({ ...o, selected: seccionalOrigenTodos, buscar: "" }));
+              setLocalidadSelect((o) => ({ ...o, selected: localidadTodos, buscar: "" }));
+              setNumeroSeguimiento("");
 
               setAppliedFilters({
                 estado: null,
@@ -1302,6 +1397,8 @@ const DenunciasHandler = () => {
                 derivadoAId: nextDerivadoId,
                 delegacionOrigenId: null,
                 seccionalOrigenId: null,
+                localidadId: null,
+                numeroSeguimiento: null,
               });
 
             }}
