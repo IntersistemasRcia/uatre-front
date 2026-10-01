@@ -554,6 +554,8 @@ const DenunciasHandler = () => {
     derivadoATipo: null,
     derivadoAId: null,
     delegacionId: null,
+    delegacionOrigenId: null,
+    seccionalOrigenId: null,
   }));
 
   const delegacionTodos = useMemo(() => ({ value: null, label: "Todas las delegaciones" }), []);
@@ -682,6 +684,80 @@ const DenunciasHandler = () => {
       return { ...o, options, selected: stillExists ? o.selected : seccionalTodos };
     });
   }, [seccionalSelect.buscar, seccionalSelect.data, delegacionSelect.selected, seccionalTodos]);
+
+  // ==============================
+  // REQ-1118: filtros "Delegación de Denuncia" / "Seccional de Denuncia" (origen)
+  // Distintos del filtro "Delegación"/"Seccional" de arriba, que es por derivación.
+  // ==============================
+  const delegacionOrigenTodos = useMemo(() => ({ value: null, label: "Todas las Delegaciones" }), []);
+  const seccionalOrigenTodos = useMemo(() => ({ value: null, label: "Todas las Seccionales" }), []);
+
+  const [delegacionOrigenSelect, setDelegacionOrigenSelect] = useState({
+    buscar: "",
+    options: [],
+    selected: delegacionOrigenTodos,
+  });
+  const [seccionalOrigenSelect, setSeccionalOrigenSelect] = useState({
+    buscar: "",
+    options: [],
+    selected: seccionalOrigenTodos,
+  });
+
+  // La denuncia conserva el código de la seccional asignada durante la registración.
+  // Es la fuente principal para no recalcular el origen a partir del catálogo actual.
+  const seccionalOrigenMap = useMemo(() => {
+    const map = new Map();
+    for (const opt of seccionalSelect.data) {
+      const codigo = String(opt.record?.codigo ?? "").trim().toUpperCase();
+      const seccionalId = Number(opt.value);
+      const delegacionId = Number(opt.record?.refDelegacionId) || null;
+      if (!codigo || !seccionalId) continue;
+      map.set(codigo, {
+        seccionalIds: new Set([seccionalId]),
+        delegacionIds: new Set(delegacionId ? [delegacionId] : []),
+      });
+    }
+    return map;
+  }, [seccionalSelect.data]);
+
+  // Respaldo para denuncias históricas que no informan seccionalCodigo. Una localidad
+  // puede estar relacionada con más de una seccional, por lo que se preservan todas.
+  const localidadOrigenMap = useMemo(() => {
+    const map = new Map();
+    for (const opt of seccionalSelect.data) {
+      const seccionalId = Number(opt.value);
+      const delegacionId = Number(opt.record?.refDelegacionId) || null;
+      const localidades = Array.isArray(opt.record?.seccionalLocalidad) ? opt.record.seccionalLocalidad : [];
+      for (const loc of localidades) {
+        const localidadId = Number(loc.refLocalidadId ?? loc.RefLocalidadId ?? loc.id);
+        if (!localidadId) continue;
+        const origen = map.get(localidadId) || {
+          seccionalIds: new Set(),
+          delegacionIds: new Set(),
+        };
+        origen.seccionalIds.add(seccionalId);
+        if (delegacionId) origen.delegacionIds.add(delegacionId);
+        map.set(localidadId, origen);
+      }
+    }
+    return map;
+  }, [seccionalSelect.data]);
+
+  // Búsqueda delegación de origen (mismo catálogo ya cargado, sin pedir de nuevo)
+  useEffect(() => {
+    const options = [delegacionOrigenTodos, ...delegacionSelect.data.filter(opt => includeSearch(opt, delegacionOrigenSelect.buscar))];
+    setDelegacionOrigenSelect(o => ({ ...o, options }));
+  }, [delegacionOrigenSelect.buscar, delegacionSelect.data, delegacionOrigenTodos]);
+
+  // Búsqueda y filtrado seccional de origen por delegación de origen
+  useEffect(() => {
+    let base = seccionalSelect.data;
+    const delegId = delegacionOrigenSelect.selected?.value;
+    if (delegId) base = base.filter(opt => Number(opt.record?.refDelegacionId) === Number(delegId));
+    const options = [seccionalOrigenTodos, ...base.filter(opt => includeSearch(opt, seccionalOrigenSelect.buscar))];
+    const stillExists = options.find(o => o.value === seccionalOrigenSelect.selected?.value);
+    setSeccionalOrigenSelect(o => ({ ...o, options, selected: stillExists ? o.selected : seccionalOrigenTodos }));
+  }, [seccionalOrigenSelect.buscar, seccionalSelect.data, delegacionOrigenSelect.selected, seccionalOrigenSelect.selected?.value, seccionalOrigenTodos]);
 
 
   // ==============================
@@ -824,6 +900,10 @@ const DenunciasHandler = () => {
       }
       return null;
     })(),
+    filtroDelegacionOrigenId: appliedFilters.delegacionOrigenId || null,
+    filtroSeccionalOrigenId: appliedFilters.seccionalOrigenId || null,
+    seccionalOrigenMap: seccionalOrigenMap,
+    localidadOrigenMap: localidadOrigenMap,
     usuarioAmbito: usuarioAmbito,
     applyAmbitoFilter: applyAmbitoFilter, //  función de filtrado por ámbito
     bloqueado: false,
@@ -1054,8 +1134,34 @@ const DenunciasHandler = () => {
             style={{ opacity: disabledSeccional ? 0.6 : 1 }}
           />
 
-
-
+          <SearchSelectMaterial
+            label="Delegación de Denuncia"
+            value={delegacionOrigenSelect.selected}
+            onChange={(selected = delegacionOrigenTodos) => {
+              setDelegacionOrigenSelect(o => ({ ...o, selected }));
+              // RN-010: toda modificación de Delegación limpia la Seccional de origen.
+              setSeccionalOrigenSelect(o => ({ ...o, selected: seccionalOrigenTodos, buscar: "" }));
+            }}
+            options={delegacionOrigenSelect.options}
+            onInputChange={(buscar, reason) => {
+              if (reason === "input" || reason === "clear") {
+                setDelegacionOrigenSelect(o => ({ ...o, buscar }));
+              }
+            }}
+            autocompleteProps={{ filterOptions: (options) => options }}
+          />
+          <SearchSelectMaterial
+            label="Seccional de Denuncia"
+            value={seccionalOrigenSelect.selected}
+            onChange={(selected = seccionalOrigenTodos) => setSeccionalOrigenSelect(o => ({ ...o, selected, buscar: "" }))}
+            options={seccionalOrigenSelect.options}
+            onInputChange={(buscar, reason) => {
+              if (reason === "input" || reason === "clear") {
+                setSeccionalOrigenSelect(o => ({ ...o, buscar }));
+              }
+            }}
+            autocompleteProps={{ filterOptions: (options) => options }}
+          />
 
 
           <DateTimePicker
@@ -1106,6 +1212,12 @@ const DenunciasHandler = () => {
                 derivadoATipo: derivadoTipo,
                 derivadoAId: derivadoId ? Number(derivadoId) : null,
                 delegacionId: filtroDelegacionValue ? Number(filtroDelegacionValue) : null,
+                delegacionOrigenId: delegacionOrigenSelect.selected?.value
+                  ? Number(delegacionOrigenSelect.selected.value)
+                  : null,
+                seccionalOrigenId: seccionalOrigenSelect.selected?.value
+                  ? Number(seccionalOrigenSelect.selected.value)
+                  : null,
               });
             }}
            >
@@ -1126,7 +1238,10 @@ const DenunciasHandler = () => {
               !filtroDerivadoATipoValue &&
               !filtroDerivadoAIdValue &&
               !filtroDelegacionValue &&
-              !filtroSeccionalValue)
+              !filtroSeccionalValue &&
+              !delegacionOrigenSelect.selected?.value &&
+              !seccionalOrigenSelect.selected?.value
+              )
             }
             onClick={() => {
               let nextDerivadoTipo = null;
@@ -1174,6 +1289,9 @@ const DenunciasHandler = () => {
                 setSeccionalSelect((o) => ({ ...o, selected: seccionalTodos, buscar: "" }));
               }
 
+              setDelegacionOrigenSelect((o) => ({ ...o, selected: delegacionOrigenTodos, buscar: "" }));
+              setSeccionalOrigenSelect((o) => ({ ...o, selected: seccionalOrigenTodos, buscar: "" }));
+
               setAppliedFilters({
                 estado: null,
                 fechaDesde: null,
@@ -1182,6 +1300,8 @@ const DenunciasHandler = () => {
                 situacionId: null,
                 derivadoATipo: nextDerivadoTipo,
                 derivadoAId: nextDerivadoId,
+                delegacionOrigenId: null,
+                seccionalOrigenId: null,
               });
 
             }}
