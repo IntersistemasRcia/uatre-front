@@ -33,6 +33,7 @@ const DateTimePicker = ({
 	format,
 	views,
 	error,
+	helperText,
 	required,
 	InputRenderProps = {},
 	renderInput = (props) => <TextField {...props} />,
@@ -104,11 +105,10 @@ const DateTimePicker = ({
 		renderProps.size ??= "small";
 		if (error) {
 			renderProps.error = true;
-			if (React.isValidElement(error) || typeof error === "string") {
-				renderProps.helperText = error;
-			}
+			renderProps.helperText = helperText ?? error;
 		} else {
 			renderProps.error = false;
+			renderProps.helperText = helperText ?? "";
 		}
 		renderProps.required = required ? required : renderProps.required;
 		renderProps.style = {
