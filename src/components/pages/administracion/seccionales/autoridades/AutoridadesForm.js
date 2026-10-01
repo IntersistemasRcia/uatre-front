@@ -88,7 +88,7 @@ const AutoridadesForm = ({
 						id="fechaVigenciaDesde"
 						disabled={disabled.fechaVigenciaDesde}
 						value={moment(getValue("fechaVigenciaDesde")).format("YYYY-MM-DD")}
-						error={!!errors.fechaVigenciaDesde}
+						error={errors.fechaVigenciaDesde ?? false}
 						helperText={errors.fechaVigenciaDesde ?? ""}
 						label="Vigencia Desde"
 						onChange={(fechaVigenciaDesde)=>onChange({fechaVigenciaDesde})}
@@ -100,7 +100,7 @@ const AutoridadesForm = ({
 						id="fechaVigenciaHasta"
 						disabled={disabled.fechaVigenciaHasta}
 						value={moment(getValue("fechaVigenciaHasta")).format("YYYY-MM-DD")}
-						error={!!errors.fechaVigenciaHasta}
+						error={errors.fechaVigenciaHasta ?? false}
 						helperText={errors.fechaVigenciaHasta ?? ""}
 						label="Vigencia Hasta"
 						onChange={(fechaVigenciaHasta)=>onChange({fechaVigenciaHasta})}
@@ -113,7 +113,7 @@ const AutoridadesForm = ({
 							id="refCargosId"
 							name="refCargosId"
 							label="Cargo"
-							error={!!errors.refCargosId} 
+							error={errors.refCargosId ?? false}
 							helperText={errors.refCargosId ?? ""}
 							value={selectedCargo(data.refCargosId)?.value}
 							disabled={disabled.refCargosId}

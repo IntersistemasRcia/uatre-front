@@ -11,7 +11,9 @@
   margin-bottom: 1.3%;
   display: flex;
   flex-direction: row;
-  max-height: 3rem;
+  min-height: 3rem;
+  height: auto;
+  align-items: flex-start;
 }
 
 .input {

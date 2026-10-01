@@ -4,8 +4,8 @@ import AutoridadesTable from "./AutoridadesTable";
 import AutoridadesForm from "./AutoridadesForm";
 import AuthContext from "../../../../../store/authContext";
 import moment from "moment";
-import FormatearFecha from "components/helpers/FormatearFecha";
 import { FormControlLabel, Switch } from "@mui/material";
+import validarAutoridad from "./validarAutoridad";
 
 
 const vigenteHasta = new Date(2099, 11, 31);
@@ -347,6 +347,11 @@ const useAutoridades = () => {
 							});
 						}
 					} else {
+						if (Object.keys(edit).length) {
+							Object.keys(edit).forEach((field) => {
+								changes.errors[field] = "";
+							});
+						}
 						applyChanges();
 					}
 				}}
@@ -378,8 +383,14 @@ const useAutoridades = () => {
 						if (!record.afiliadoId) errors.afiliadoNumero = "Debe VALIDAR el afiliado";
 						if (!record.afiliadoNumero) errors.afiliadoNumero = "Debe ingresar un Numero de Afiliado existente";
 						if (!record.refCargosId) errors.refCargosId = "Debe seleccionar un Cargo";
-						//if (!record.fechaVigenciaDesde) errors.fechaVigenciaDesde = "Debe ingresar una Fecha de Vigencia";
-						//if (!record.observaciones) errors.observaciones = "Debe ingresar un observación";
+						Object.assign(
+							errors,
+							validarAutoridad({
+								record,
+								authorities: list.data,
+								request: list.selection.request,
+							})
+						);
 					}
 
 
@@ -398,7 +409,34 @@ const useAutoridades = () => {
 						config: {},
 						onOk: (res) =>
 							setList((old) => ({ ...old, loading: "Cargando..." })),
-						onError: (err) => alert(err.message),
+								onError: (err) => {
+									const message =
+										typeof err?.message === "string"
+											? err.message
+											: "No se pudo guardar la autoridad";
+									const source = `${err?.data?.field ?? ""} ${message}`.toLowerCase();
+									const field = source.includes("cargo") || source.includes("refcargos")
+										? "refCargosId"
+										: source.includes("afiliado")
+											? "afiliadoNumero"
+											: source.includes("desde")
+												? "fechaVigenciaDesde"
+												: source.includes("hasta")
+													? "fechaVigenciaHasta"
+													: null;
+
+									if (field) {
+										setList((old) => ({
+											...old,
+											selection: {
+												...old.selection,
+												errors: { ...old.selection.errors, [field]: message },
+											},
+										}));
+									} else {
+										alert(message);
+									}
+								},
 					};
 
 
