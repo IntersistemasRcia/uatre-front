@@ -148,7 +148,7 @@ const AfiliadoDetails = (props) => {
 									<InputMaterial label="Situación de CUIL" value={validar(ddjj.cuilSituacion)+" - "+validar(ddjj.cuilSituacionDescripcion)} />
 									<InputMaterial label="Siniestro" value={ddjj.siniestroCod == 1 ? "Activo" : "-"}/>	
 									<InputMaterial label="Reducción" value={validar(ddjj.reduccion)}/>							
-									{ tareas.hasTarea("Afiliaciones_DDJJ_VerRemuneraciones") && <InputMaterial label="Importes" value={ddjj.esEmpresaRural == "No" || !ddjj.esEmpresaRural ? Formato.Moneda(validar(ddjj.remuneracionImponible)) : " "}/>}
+									{ tareas.hasTarea("Afiliaciones_DDJJ_VerRemuneraciones") && <InputMaterial label="Importes" value={ddjj.esEmpresaRural == "No" || !ddjj.esEmpresaRural ? (ddjj.remuneracionImponible > 0 ? Formato.Moneda(validar(ddjj.remuneracionImponible)) : Formato.Moneda(validar(ddjj.remuneracion1))) : " "}/>}
 									<InputMaterial label="Cantidad Hs Extras" value={validar(ddjj.hsExtrasCantidad)}/>
 									<InputMaterial label="Dias Trabajados" value={validar(ddjj.diasTrabajados)}/>
 								</Grid>
