@@ -120,7 +120,7 @@ const DeclaracionesJuradas = (props) => {
         text: "Remuneración",
         formatter: (value, row) => (
          
-          row.esEmpresaRural == "No" || !row.esEmpresaRural ? Formato.Moneda(value) :
+          row.esEmpresaRural == "No" || !row.esEmpresaRural ? (value > 0 ? Formato.Moneda(value) : Formato.Moneda(row.remuneracion1)) :
           " "
         ),
         hidden: !tareas.hasTarea("Afiliaciones_DDJJ_VerRemuneraciones"),
