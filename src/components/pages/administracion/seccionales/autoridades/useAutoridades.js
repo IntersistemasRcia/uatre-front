@@ -5,7 +5,7 @@ import AutoridadesForm from "./AutoridadesForm";
 import AuthContext from "../../../../../store/authContext";
 import moment from "moment";
 import { FormControlLabel, Switch } from "@mui/material";
-import validarAutoridad from "./validarAutoridad";
+import validarAutoridad, { validarAfiliadoAutoridad } from "./validarAutoridad";
 
 
 const vigenteHasta = new Date(2099, 11, 31);
@@ -298,6 +298,17 @@ const useAutoridades = () => {
 				})()}
 				onChange={(edit) => { //solo entra el campo que se está editando
 					const changes = { edit: { ...edit }, errors: {} };
+					const authorityValidationFields = [
+						"afiliadoNumero",
+						"refCargosId",
+						"fechaVigenciaDesde",
+						"fechaVigenciaHasta",
+					];
+					if (Object.keys(edit).some((field) => authorityValidationFields.includes(field))) {
+						authorityValidationFields.forEach((field) => {
+							changes.errors[field] = "";
+						});
+					}
 					const applyChanges = ({ edit, errors } = changes) =>
 						setList((o) => ({
 							...o,
@@ -310,6 +321,9 @@ const useAutoridades = () => {
 						//VALIDO EL NRO DEL AFILIADO
 					//console.log('numero afil:',changes.edit.afiliadoNumero);
 					if ("afiliadoNumero" in edit) {
+						changes.edit.afiliadoId = 0;
+						changes.edit.afiliadoValidado = false;
+						changes.errors.afiliadoNumero = "";
 
 						if (changes.edit.afiliadoNumero >= 1) {
 							changes.errors.afiliadoNombre = "";
@@ -333,15 +347,27 @@ const useAutoridades = () => {
 									}
 								},
 								onOk: async (ok) => {
-									changes.edit.afiliadoId = ok?.data.length >= 1 ? ok?.data[0]?.id : 0;
-									changes.edit.afiliadoNombre = ok?.data.length >= 1 ? ok?.data[0]?.nombre : "Afiliado no disponible";
+									const affiliate = ok?.data?.[0];
+									const authoritySeccionalId =
+										list.params.seccionalId ?? changes.edit.seccionalId;
+									const validationError = validarAfiliadoAutoridad(
+										affiliate,
+										authoritySeccionalId
+									);
+									changes.edit.afiliadoId = validationError ? 0 : affiliate.id;
+									changes.edit.afiliadoValidado = !validationError;
+									changes.edit.afiliadoNombre = affiliate?.nombre ?? "Afiliado no disponible";
+									changes.errors.afiliadoNumero = validationError;
 									changes.errors.afiliadoNombre = '';
 									
 									//changes.errors.afiliadoNombre = "";
 								},
 								onError: async (error) => {
-									changes.errors.afiliadoNombre =
+									changes.edit.afiliadoId = 0;
+									changes.edit.afiliadoValidado = false;
+									changes.errors.afiliadoNumero =
 										error.message ?? "Error obteniendo datos del afiliado";
+									changes.errors.afiliadoNombre = "";
 								},
 								onFinally: async () => applyChanges(),
 							});
@@ -381,6 +407,9 @@ const useAutoridades = () => {
 					} else {
 						if (record.afiliadoId === 0) errors.afiliadoNumero = "Debe ingresar afiliado valido";
 						if (!record.afiliadoId) errors.afiliadoNumero = "Debe VALIDAR el afiliado";
+						if (record.afiliadoValidado === false && !errors.afiliadoNumero) {
+							errors.afiliadoNumero = "Debe VALIDAR el afiliado";
+						}
 						if (!record.afiliadoNumero) errors.afiliadoNumero = "Debe ingresar un Numero de Afiliado existente";
 						if (!record.refCargosId) errors.refCargosId = "Debe seleccionar un Cargo";
 						Object.assign(
@@ -410,11 +439,12 @@ const useAutoridades = () => {
 						onOk: (res) =>
 							setList((old) => ({ ...old, loading: "Cargando..." })),
 								onError: (err) => {
-									const message =
+										const serverMessage =
 										typeof err?.message === "string"
 											? err.message
 											: "No se pudo guardar la autoridad";
-									const source = `${err?.data?.field ?? ""} ${message}`.toLowerCase();
+										const message = `Respuesta del servidor (HTTP ${err?.code ?? "desconocido"}): ${serverMessage}`;
+										const source = `${err?.data?.field ?? ""} ${serverMessage}`.toLowerCase();
 									const field = source.includes("cargo") || source.includes("refcargos")
 										? "refCargosId"
 										: source.includes("afiliado")
