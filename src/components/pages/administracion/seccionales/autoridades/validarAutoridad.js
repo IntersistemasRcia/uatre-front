@@ -3,10 +3,16 @@ import moment from "moment";
 const parseDate = (value) => {
 	if (!value) return null;
 
-	const date = moment(value, ["YYYY-MM-DD", moment.ISO_8601], true);
-	if (!date.isValid() && (value instanceof Date || typeof value?.format === "function")) {
+	if (typeof value?.format === "function") {
+		const date = moment(value.format("YYYY-MM-DD"), "YYYY-MM-DD", true);
+		return date.isValid() ? date.startOf("day") : null;
+	}
+
+	if (value instanceof Date) {
 		return moment(value).isValid() ? moment(value).startOf("day") : null;
 	}
+
+	const date = moment(value, ["YYYY-MM-DD", moment.ISO_8601], true);
 	return date.isValid() ? date.startOf("day") : null;
 };
 
@@ -16,6 +22,33 @@ const periodsOverlap = (leftStart, leftEnd, rightStart, rightEnd) =>
 
 const isActive = (record) => !record?.deletedDate;
 const today = () => moment().startOf("day");
+
+export const validarAfiliadoAutoridad = (affiliate, seccionalId) => {
+	if (!affiliate) return "Afiliado no disponible";
+
+	const statusId = Number(affiliate.estadoSolicitudId);
+	const status = affiliate.estadoSolicitud?.trim().toLowerCase();
+	if (status === "baja" || (!status && statusId === 3)) {
+		return "EL AFILIADO SE ENCUENTRA EN ESTADO DE BAJA.";
+	}
+	if (status ? status !== "activo" : statusId !== 2) {
+		return "EL AFILIADO NO SE ENCUENTRA EN ESTADO ACTIVO.";
+	}
+
+	const affiliateSeccionalId = Number(affiliate.seccionalId);
+	const authoritySeccionalId = Number(seccionalId);
+	if (!Number.isFinite(authoritySeccionalId)) {
+		return "No se pudo determinar la seccional de la autoridad";
+	}
+	if (
+		!Number.isFinite(affiliateSeccionalId) ||
+		affiliateSeccionalId !== authoritySeccionalId
+	) {
+		return "AFILIADO REGISTRADO EN OTRA SECCIONAL";
+	}
+
+	return "";
+};
 
 export const validarAutoridad = ({ record = {}, authorities = [], request }) => {
 	const errors = {};
@@ -50,8 +83,16 @@ export const validarAutoridad = ({ record = {}, authorities = [], request }) => 
 
 	const activeCargo = sameCargo.filter(isActive);
 	const currentCargo = activeCargo.find((authority) => {
+		const authorityFrom = parseDate(authority.fechaVigenciaDesde);
 		const authorityUntil = parseDate(authority.fechaVigenciaHasta);
-		return authorityUntil?.isAfter(today(), "day");
+		const isCurrentlyActive =
+			authorityFrom?.isSameOrBefore(today(), "day") &&
+			authorityUntil?.isSameOrAfter(today(), "day");
+
+		return (
+			isCurrentlyActive &&
+			periodsOverlap(from, until, authorityFrom, authorityUntil)
+		);
 	});
 	if (currentCargo) {
 		errors.refCargosId =

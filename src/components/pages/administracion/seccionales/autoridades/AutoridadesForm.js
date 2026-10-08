@@ -12,6 +12,13 @@ import SelectMaterial from "../../../../ui/Select/SelectMaterial";
 
 const onChangeDef = (changes = {}) => {};
 const onCloseDef = (confirm = false) => {};
+const formatDateValue = (value) => {
+	if (!value) return "";
+	if (typeof value?.format === "function") return value.format("YYYY-MM-DD");
+
+	const date = moment(value);
+	return date.isValid() ? date.format("YYYY-MM-DD") : "";
+};
 
 const AutoridadesForm = ({
 	data = {},
@@ -37,10 +44,8 @@ const AutoridadesForm = ({
 	const getValue = (v) => data[v] ?? "";
 
 	useEffect(()=>{
-		//format("YYYY-MM-DD")
-		moment(getValue("fechaVigenciaDesde")).format("YYYY-MM-DD")
-		onChange({fechaVigenciaDesde: moment(data.fechaVigenciaDesde).format("YYYY-MM-DD")});
-		onChange({fechaVigenciaHasta: moment(data.fechaVigenciaHasta).format("YYYY-MM-DD")});
+		onChange({fechaVigenciaDesde: formatDateValue(data.fechaVigenciaDesde)});
+		onChange({fechaVigenciaHasta: formatDateValue(data.fechaVigenciaHasta)});
 	},[]);
 
 	const selectedCargo = (cargoId) =>{
@@ -87,11 +92,11 @@ const AutoridadesForm = ({
 					<InputMaterial
 						id="fechaVigenciaDesde"
 						disabled={disabled.fechaVigenciaDesde}
-						value={moment(getValue("fechaVigenciaDesde")).format("YYYY-MM-DD")}
+						value={formatDateValue(getValue("fechaVigenciaDesde"))}
 						error={errors.fechaVigenciaDesde ?? false}
 						helperText={errors.fechaVigenciaDesde ?? ""}
 						label="Vigencia Desde"
-						onChange={(fechaVigenciaDesde)=>onChange({fechaVigenciaDesde})}
+						onChange={(fechaVigenciaDesde)=>onChange({fechaVigenciaDesde: formatDateValue(fechaVigenciaDesde)})}
 						type="date"
 					/>
 					</div>
@@ -99,11 +104,11 @@ const AutoridadesForm = ({
 					<InputMaterial
 						id="fechaVigenciaHasta"
 						disabled={disabled.fechaVigenciaHasta}
-						value={moment(getValue("fechaVigenciaHasta")).format("YYYY-MM-DD")}
+						value={formatDateValue(getValue("fechaVigenciaHasta"))}
 						error={errors.fechaVigenciaHasta ?? false}
 						helperText={errors.fechaVigenciaHasta ?? ""}
 						label="Vigencia Hasta"
-						onChange={(fechaVigenciaHasta)=>onChange({fechaVigenciaHasta})}
+						onChange={(fechaVigenciaHasta)=>onChange({fechaVigenciaHasta: formatDateValue(fechaVigenciaHasta)})}
 						type="date"
 					/>
 					</div>
