@@ -117,7 +117,8 @@ const useAutoridades = () => {
 			action: "GetList",
 			params: {
 				...list.params,
-				SoloActivos: false
+				SoloActivos: false,
+				SoloVigentes: false,
 				//pageIndex: list.pagination.index,
 				//pageSize: list.pagination.size,
 			},
