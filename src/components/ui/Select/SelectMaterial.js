@@ -20,10 +20,10 @@ const SelectMaterial = (props) => {
     props.onChange(event.target.value, event.target.name);
   };
 
-	let helperTextRender;
-	if (props.error && props.error !== true) {
-		helperTextRender = <FormHelperText>{props.error}</FormHelperText>
-	}
+	const helperText = props.helperText || (props.error !== true ? props.error : "");
+	const helperTextRender = helperText ? (
+		<FormHelperText>{helperText}</FormHelperText>
+	) : null;
 
   return (
 		<FormControl

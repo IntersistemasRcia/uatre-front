@@ -52,6 +52,12 @@ const useDenuncias = ({
   filtroDerivadoAId = null,
   filtroDelegacionId = null,
   bloqueado = false,
+  filtroDelegacionOrigenId = null,
+  filtroSeccionalOrigenId = null,
+  seccionalOrigenMap = null,
+  localidadOrigenMap = null,
+  filtroLocalidadId = null,
+  filtroNumeroSeguimiento = null,
 } = {}) => {
 
 
@@ -225,6 +231,32 @@ const useDenuncias = ({
                   });
                 }
 
+                // REQ-1118: el código de seccional es el origen asignado al registrar.
+                // Las denuncias históricas sin código usan la relación de localidad como respaldo.
+                if ((filtroDelegacionOrigenId || filtroSeccionalOrigenId) && (seccionalOrigenMap || localidadOrigenMap)) {
+                  dataConEstados = dataConEstados.filter((d) => {
+                    const seccionalCodigo = String(d.seccionalCodigo ?? d.SeccionalCodigo ?? "").trim().toUpperCase();
+                    const localidadId = Number(d.localidadId ?? d.LocalidadId ?? 0);
+                    const origen = seccionalOrigenMap?.get(seccionalCodigo)
+                      || localidadOrigenMap?.get(localidadId);
+                    if (filtroDelegacionOrigenId && !origen?.delegacionIds?.has(Number(filtroDelegacionOrigenId))) return false;
+                    if (filtroSeccionalOrigenId && !origen?.seccionalIds?.has(Number(filtroSeccionalOrigenId))) return false;
+                    return true;
+                  });
+                }
+
+                // AF E1ulKugD: filtro por Localidad (comparación directa contra localidadId de la denuncia)
+                if (filtroLocalidadId) {
+                  const target = Number(filtroLocalidadId);
+                  dataConEstados = dataConEstados.filter((d) => Number(d.localidadId ?? d.LocalidadId ?? 0) === target);
+                }
+
+                // AF E1ulKugD: filtro por Número de seguimiento de la denuncia.
+                if (filtroNumeroSeguimiento) {
+                  const target = Number(filtroNumeroSeguimiento);
+                  dataConEstados = dataConEstados.filter((d) => Number(d.numeroSeguimiento) === target);
+                }
+
                 // ✅ ORDENAR POR FECHA DESCENDENTE (más nueva primero)
                 const dataOrdenada = dataConEstados.sort((a, b) => {
                   const fechaA = new Date(a.fecha || a.fechaEstado || '1900-01-01');
@@ -291,6 +323,12 @@ const useDenuncias = ({
     filtroDerivadoATipo,
     filtroDerivadoAId,
     filtroDelegacionId,
+    filtroDelegacionOrigenId,
+    filtroSeccionalOrigenId,
+    seccionalOrigenMap,
+    localidadOrigenMap,
+    filtroLocalidadId,
+    filtroNumeroSeguimiento,
   ]);
 
   //  ACTIVAR LOADING CUANDO CAMBIEN LOS FILTROS
@@ -311,6 +349,12 @@ const useDenuncias = ({
     filtroDerivadoATipo,
     filtroDerivadoAId,
     filtroDelegacionId,
+    filtroDelegacionOrigenId,
+    filtroSeccionalOrigenId,
+    seccionalOrigenMap,
+    localidadOrigenMap,
+    filtroLocalidadId,
+    filtroNumeroSeguimiento,
   ]);
 
   const request = useCallback((type, payload = {}) => {

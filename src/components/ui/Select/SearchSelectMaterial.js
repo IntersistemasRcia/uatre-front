@@ -181,14 +181,14 @@ const SearchSelectMaterial = ({
 				value={currentValue}
 				inputValue={inputValue}
 				onInputChange={(event, newInputValue, reason) => {
-					if (onInputChange) onInputChange(newInputValue);
+					if (onInputChange) onInputChange(newInputValue, reason);
 					else onTextChange(newInputValue);
 				}}
 				onChange={(event, newValue, reason) => {
 					if (reason === 'selectOption' || reason === 'clear' || reason === 'removeOption') {
 						const normalizedValue = normalizeOption(newValue, clearOption);
 						onChange(normalizedValue, name);
-						if (onInputChange) onInputChange(normalizedValue.label || '');
+						if (onInputChange) onInputChange(normalizedValue.label || '', reason);
 					}
 				}}
 				getOptionLabel={(option) =>
