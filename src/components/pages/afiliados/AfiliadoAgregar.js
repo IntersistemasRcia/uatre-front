@@ -2989,12 +2989,65 @@ const AfiliadoAgregar = (props) => {
       fechaNacimiento: "Fecha Nacimiento"
     };
 
+    const opcionesReferenciales = {
+      puestoId: puestos,
+      nacionalidadId: nacionalidades,
+      seccionalId: seccionales.data,
+      seccionalIdSolicitudAfiliacion: seccionalSolicitaAfiliacion,
+      sexoId: sexos,
+      tipoDocumentoId: tiposDocumentos,
+      actividadId: actividades,
+      estadoCivilId: estadosCiviles,
+      refLocalidadId: localidades.data,
+    };
+
+    const camposDescripcionOriginal = {
+      seccionalId: ["seccional", "seccionalDescripcion"],
+      seccionalIdSolicitudAfiliacion: [
+        "seccionalDescripcionSolicitudAfiliacion",
+        "seccionalSolicitudAfiliacion",
+      ],
+      refLocalidadId: ["localidad", "localidadDescripcion"],
+      puestoId: ["puestoDescripcion", "puesto"],
+      nacionalidadId: ["nacionalidadDescripcion", "nacionalidad"],
+      sexoId: ["sexoDescripcion", "sexo"],
+      tipoDocumentoId: ["tipoDocumentoDescripcion", "tipoDocumento"],
+      actividadId: ["actividadDescripcion", "actividad"],
+      estadoCivilId: ["estadoCivilDescripcion", "estadoCivil"],
+    };
+
+    const describirValorAuditoria = (campo, valor, registro) => {
+      if (valor === null || valor === undefined || valor === "") {
+        return "vacío";
+      }
+
+      const opciones = opcionesReferenciales[campo];
+      if (!opciones) return valor;
+
+      const opcion = opciones.find(
+        (item) => String(item?.value) === String(valor)
+      );
+      if (opcion?.label) return opcion.label;
+
+      const descripcionOriginal = (camposDescripcionOriginal[campo] ?? [])
+        .map((propiedad) => registro?.[propiedad])
+        .find((descripcion) => descripcion);
+
+      return descripcionOriginal ?? valor;
+    };
+
     Object.keys(mapearCampos).forEach(campo => {
       const valorAnterior = afiliado?.[campo];
       const valorNuevo = afiliadoModificado[campo];
       
       if (valorAnterior != valorNuevo) {
-        cambiosTexto.push(`${mapearCampos[campo]}: ${valorAnterior ?? 'vacío'} → ${valorNuevo ?? 'vacío'}`);
+        cambiosTexto.push(
+          `${mapearCampos[campo]}: ${describirValorAuditoria(
+            campo,
+            valorAnterior,
+            afiliado
+          )} → ${describirValorAuditoria(campo, valorNuevo, afiliadoModificado)}`
+        );
       }
     });
 
