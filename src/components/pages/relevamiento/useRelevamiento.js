@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useState, useContext } from "react";
 import dayjs from "dayjs";
 import AsArray from "components/helpers/AsArray";
 import JoinOjects from "components/helpers/JoinObjects";
-import { id, pick } from "components/helpers/Utils";
 import useQueryQueue from "components/hooks/useQueryQueue";
 import AuthContext from "store/authContext";
 import RelevamientoTable from "./RelevamientoTable";
@@ -42,6 +41,36 @@ export const onDataChangeDef = (data = []) => {};
 const onEditChangeDef = ({ edit = {}, changes = {}, request = "" } = {}) => true;
 const onEditValidateDef = ({ edit = {}, errors = {}, request = "" } = {}) => {};
 const onEditCompleteDef = ({ edit = {}, response = null, request = "" } = {}) => {};
+
+const normalizeSearch = (value) =>
+  String(value ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .trim();
+
+const digitsOnly = (value) => String(value ?? "").replace(/\D/g, "");
+
+const matchesEmployer = (record, value) => {
+  const search = normalizeSearch(value);
+  if (!search) return true;
+
+  const razonSocial = normalizeSearch(
+    record?.establecimientoRazonSocial ??
+      record?.EstablecimientoRazonSocial ??
+      record?.establecimientoNombre ??
+      record?.EstablecimientoNombre
+  );
+  const searchDigits = digitsOnly(value);
+  const cuit = digitsOnly(
+    record?.establecimientoCUIT ??
+      record?.EstablecimientoCUIT ??
+      record?.establecimientoCuit ??
+      record?.EstablecimientoCuit
+  );
+
+  return razonSocial.includes(search) || (searchDigits.length > 0 && cuit.includes(searchDigits));
+};
 
 const useRelevamiento = ({
   remote: remoteInit = true,
@@ -98,6 +127,7 @@ const useRelevamiento = ({
     delegaciones: [],
     pagination: { index: 1, size: 10 },
     data: [...AsArray(dataInit, true)],
+    allData: [...AsArray(dataInit, true)],
     error,
     selection: {
       ...selectionDef,
@@ -115,70 +145,129 @@ const useRelevamiento = ({
     if (!list.loading) return;
     if (fetchingRef.current) return;
     fetchingRef.current = true;
-    const changes = { loading: null, error: null };
 
     if (!list.remote) {
       const data = list.data;
-      const error = list.error;
       const multi = list.selection.multi;
       const record = list.selection.record;
-      changes.data = data;
-      changes.error = error;
-      changes.selection = {
+      const selection = {
         ...list.selection,
         ...selectionDef,
         record: list.onLoadSelect({ data, multi, record }),
       };
-      changes.selection.index = multi
-        ? changes.selection.record?.map((r) => changes.data.indexOf(r))
-        : changes.data.indexOf(changes.selection.record);
-      setList((o) => ({ ...o, ...changes }));
+      selection.index = multi
+        ? selection.record?.map((r) => data.indexOf(r))
+        : data.indexOf(selection.record);
+      fetchingRef.current = false;
+      setList((o) => ({ ...o, loading: null, allData: data, selection }));
       return;
     }
 
-    changes.data = [];
-    pushQuery({
-      action: "GetList",
-      params: {
-        ...list.paramsDef,
-        ...list.params,
-        pageIndex: list.pagination.index,
-        pageSize: list.pagination.size,
-      },
-      onOk: async ({ data, total, ...pagination }) => {
-        if (!Array.isArray(data))
-          return console.error("Se esperaba un arreglo de encuestas en GetList", data);
-        changes.data = data;
-        const multi = list.selection.multi;
-        const record = list.selection.record;
-        changes.pagination = { ...pagination, total };
-        changes.selection = {
-          ...list.selection,
-          ...selectionDef,
-          record: list.onLoadSelect({ data, multi, record }),
-        };
-        changes.selection.index = multi
-          ? changes.selection.record?.map((r) => changes.data.indexOf(r))
-          : changes.data.indexOf(changes.selection.record);
-        list.onDataChange(changes.data);
-      },
-      onError: async (error) => {
-        if (error.code === 404) return;
-        changes.error = error;
-        changes.selection = { ...list.selection, ...selectionDef };
-      },
-      onFinally: async () => {
-        fetchingRef.current = false;
-        setList((o) => ({ ...o, ...changes }));
-      },
-    });
+    // Se cargan todos los bloques para que el filtro local por CUIT/nombre
+    // pueda buscar sobre el conjunto completo de inspecciones.
+    const pageSizeRequest = 100;
+    const paramsApi = { ...list.paramsDef, ...list.params };
+    const filtroEmpleador = String(paramsApi.filtroEmpleador ?? "").trim();
+    delete paramsApi.filtroEmpleador;
+    delete paramsApi.filtro;
+
+    const accumulated = [];
+    let finished = false;
+
+    const finish = ({ data = [], pagination = {}, error: requestError = null } = {}) => {
+      if (finished) return;
+      finished = true;
+      const filtered = filtroEmpleador
+        ? data.filter((record) => matchesEmployer(record, filtroEmpleador))
+        : data;
+      const pageSize = Number(list.pagination.size) || 10;
+      const requestedIndex = Number(list.pagination.index) || 1;
+      const pages = Math.max(1, Math.ceil(filtered.length / pageSize));
+      const index = Math.min(requestedIndex, pages);
+      const start = (index - 1) * pageSize;
+      const pageData = filtered.slice(start, start + pageSize);
+      const multi = list.selection.multi;
+      const record = list.selection.record;
+      const selection = {
+        ...list.selection,
+        ...selectionDef,
+        record: list.onLoadSelect({ data: pageData, multi, record }),
+      };
+      selection.index = multi
+        ? selection.record?.map((r) => pageData.indexOf(r))
+        : pageData.indexOf(selection.record);
+
+      list.onDataChange(pageData);
+      fetchingRef.current = false;
+      setList((o) => ({
+        ...o,
+        loading: null,
+        error: requestError,
+        data: pageData,
+        allData: filtered,
+        pagination: {
+          ...o.pagination,
+          ...pagination,
+          index,
+          size: pageSize,
+          count: filtered.length,
+          total: filtered.length,
+          pages,
+        },
+        selection,
+      }));
+    };
+
+    const loadPage = (pageIndex) => {
+      pushQuery({
+        action: "GetList",
+        params: {
+          ...paramsApi,
+          pageIndex,
+          pageSize: pageSizeRequest,
+        },
+        onOk: async (response) => {
+          const responseData = Array.isArray(response) ? response : response?.data;
+          if (!Array.isArray(responseData)) {
+            finish({ error: new Error("Respuesta inválida del endpoint Fiscalizaciones") });
+            return;
+          }
+          accumulated.push(...responseData);
+
+          const total = Number(response?.total ?? response?.totalCount ?? response?.count ?? 0);
+          const responseSize = Number(response?.size ?? response?.pageSize ?? pageSizeRequest) || pageSizeRequest;
+          const serverPages = Number(response?.pages ?? response?.pageCount ?? 0);
+          const totalPages = serverPages || (total > 0 ? Math.ceil(total / responseSize) : responseData.length < responseSize ? pageIndex : pageIndex + 1);
+
+          if (pageIndex < totalPages && responseData.length > 0) {
+            loadPage(pageIndex + 1);
+            return;
+          }
+
+          finish({
+            data: accumulated,
+            pagination: {
+              count: accumulated.length,
+              total: accumulated.length,
+              pages: Math.max(1, Math.ceil(accumulated.length / (Number(list.pagination.size) || 10))),
+            },
+          });
+        },
+        onError: async (requestError) => finish({ error: requestError }),
+      });
+    };
+
+    loadPage(1);
   }, [pushQuery, list]);
 
   // ====== Datos visibles en la tabla ======
   const visibleData = React.useMemo(() => {
-    const base = filtroEstado ? filtroEstado([...list.data]) : [...list.data];
-    return base.slice(0, 15);
-  }, [list.data, filtroEstado]);
+    const base = filtroEstado ? filtroEstado([...list.allData]) : [...list.allData];
+    const size = Number(list.pagination.size) || 10;
+    const index = Number(list.pagination.index) || 1;
+    const start = (index - 1) * size;
+    return base.slice(start, start + size);
+  }, [list.allData, list.pagination.index, list.pagination.size, filtroEstado]);
 
   // ====== Asegurar que el PRIMER visible quede seleccionado ======
   useEffect(() => {
@@ -233,6 +322,9 @@ const useRelevamiento = ({
       }
       case "list": {
         return setList((o) => {
+          const nextParams = payload.replaceParams
+            ? { ...paramsInit, ...(payload.params || {}) }
+            : { ...o.params, ...(payload.params || {}) };
           const changes = {
             loading: null,
             data:
@@ -241,6 +333,12 @@ const useRelevamiento = ({
                 : payload.clear
                 ? []
                 : o.data,
+            allData:
+              "data" in payload && Array.isArray(payload.data)
+                ? [...payload.data]
+                : payload.clear
+                ? []
+                : o.allData,
             loadingOverride: payload.loading,
             error: payload.error,
             onLoadSelect: "onLoadSelect" in payload ? payload.onLoadSelect : o.onLoadSelect,
@@ -249,12 +347,7 @@ const useRelevamiento = ({
               multi: "multi" in payload ? !!payload.multi : o.selection.multi,
             },
           };
-          if (payload.params) {
-            changes.params = {
-              ...pick(o.params, paramsInit),
-              ...payload.params,
-            };
-          }
+          if (payload.params || payload.replaceParams) changes.params = nextParams;
           if (payload.pagination) changes.pagination = { ...o.pagination, ...payload.pagination };
           if (payload.clear) {
             const data = changes.data;
@@ -403,13 +496,29 @@ const useRelevamiento = ({
           columns={columns}
           pagination={{
             ...list.pagination,
-            total: Math.min(15, list.data.length),
-            pageSize: 15,
-            current: 1,
+            count: filtroEstado ? filtroEstado([...list.allData]).length : list.allData.length,
             showSizeChanger: false,
             hideOnSinglePage: true,
-            onChange: () => {
-              console.log("Paginación deshabilitada para 15 registros máximo");
+            onChange: ({ index, size }) => {
+              setList((o) => {
+                const base = filtroEstado ? filtroEstado([...o.allData]) : [...o.allData];
+                const start = (index - 1) * size;
+                const pageData = base.slice(start, start + size);
+                const selection = {
+                  ...o.selection,
+                  ...selectionDef,
+                  record: o.onLoadSelect({ data: pageData, multi: o.selection.multi, record: o.selection.record }),
+                };
+                selection.index = o.selection.multi
+                  ? selection.record?.map((r) => pageData.indexOf(r))
+                  : pageData.indexOf(selection.record);
+                return {
+                  ...o,
+                  data: pageData,
+                  pagination: { ...o.pagination, index, size },
+                  selection,
+                };
+              });
             },
           }}
           selection={{
