@@ -466,7 +466,9 @@ const RelevamientoHandler = () => {
 
     if (delegId != null) params.delegacionId = delegId;
     if (seccId != null) params.seccionalId = seccId;
-    if (empleadorUI?.trim()) params.EstablecimientoRazonSocial = empleadorUI.trim();
+    // El empleador se filtra en frontend para soportar tanto razón social
+    // como CUIT sin requerir cambios en el endpoint Fiscalizaciones.
+    params.filtroEmpleador = empleadorUI?.trim() || "";
     if (fechaDesde) params.FechaDesde = fechaDesde;
     if (fechaHasta) params.FechaHasta = fechaHasta;
 
@@ -493,6 +495,7 @@ const RelevamientoHandler = () => {
 
     relevamientoChanger("list", {
       params: {},
+      replaceParams: true,
       pagination: { index: 1, size: 10 },
       onLoadSelect: onLoadSelectKeepOrFirst,
     });
@@ -555,9 +558,10 @@ const RelevamientoHandler = () => {
             onTextChange={(buscar) => setSeccionalSelect((o) => ({ ...o, buscar }))}
           />
 
-          {/* Empleador (exacto) */}
+          {/* Empleador: búsqueda local por razón social o CUIT */}
           <InputMaterial
-            label="Empleador"
+            label="Empleador (nombre o CUIT)"
+            placeholder="Razón social o CUIT"
             value={empleadorUI}
             onChange={(v) => setEmpleadorUI(v && v.target ? v.target.value : v)}
           />
