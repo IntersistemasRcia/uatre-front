@@ -26,6 +26,42 @@ const selectionDef = {
 const onEditValidateDef = ({ edit = {}, errors = {}, request = "" } = {}) => {};
 const onEditChangeDef = ({ edit = {}, changes = {}, request = "" } = {}) => true;
 
+const getErrorMessage = (error) => {
+  const message = error?.message ?? error;
+  if (typeof message === "string") return message;
+  if (message && typeof message === "object") {
+    return Object.entries(message)
+      .map(([field, value]) => {
+        const detail = Array.isArray(value) ? value.join(", ") : value;
+        return field + ": " + detail;
+      })
+      .join("\n");
+  }
+  return "Ocurrió un error al guardar la pregunta.";
+};
+
+const toInteger = (value) => {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) &&
+    parsed >= -2147483648 &&
+    parsed <= 2147483647
+    ? parsed
+    : undefined;
+};
+
+const toUpdateQuestion = (question = {}) => ({
+  id: toInteger(question.id),
+  tipoPregunta: question.tipoPregunta,
+  enunciado: question.enunciado,
+  ordenPregunta: toInteger(question.ordenPregunta),
+  detalles: (question.detalles ?? []).map((detail) => ({
+    id: toInteger(detail.id),
+    texto: detail.texto ?? "",
+    valorPorDefault: !!detail.valorPorDefault,
+    esObligatorio: !!detail.esObligatorio,
+  })),
+});
+
 const usePreguntas = ({
   onEditValidate: onEditValidateInit = onEditValidateDef,
   onEditChange: onEditChangeInit = onEditChangeDef,
@@ -190,9 +226,10 @@ const usePreguntas = ({
     switch (type) {
       case "selected":
         setList((prev) => {
-          // Calcular el siguiente orden de pregunta para nuevas preguntas
-          let ordenCalculado = payload.record?.ordenPregunta;
-          if (payload.request === "A" && !ordenCalculado) {
+          const selectedQuestion =
+            payload.request === "A" ? {} : prev.selection.record ?? {};
+          let ordenCalculado = selectedQuestion.ordenPregunta;
+          if (payload.request === "A") {
             const maxOrden = prev.data.length > 0 
               ? Math.max(...prev.data.map(p => Number(p.ordenPregunta || 0)))
               : 0;
@@ -206,7 +243,7 @@ const usePreguntas = ({
               request: payload.request,
               action: payload.action,
               edit: {
-                ...(payload.request === "A" ? {} : prev.selection.record),
+                ...selectedQuestion,
                 ...payload.record,
                 ordenPregunta: ordenCalculado,
                 preguntasList: prev.data, // Agregamos la lista para el formulario
@@ -242,6 +279,23 @@ const usePreguntas = ({
     }
   }, []);
   
+
+  const closeQuestionForm = () => {
+    setList((prev) => {
+      const index = Number.isInteger(prev.selection.index) ? prev.selection.index : null;
+      const record = index == null ? null : prev.data.at(index) ?? null;
+      return {
+        ...prev,
+        loading: null,
+        successMessage: null,
+        selection: {
+          ...selectionDef,
+          index,
+          record,
+        },
+      };
+    });
+  };
 
   let form = null;
   if (list.selection.edit) {
@@ -287,6 +341,12 @@ const usePreguntas = ({
             if (list.selection.request === "B") {
             r = { ...r, deletedBy: true, deletedDate: true,  deletedObs: false, ordenPregunta: true, tipoPregunta: true, textoLibre: true, detalles: true, texto: true, enunciado: true};
           }
+          if (
+            list.selection.request === "M" &&
+            list.selection.edit?.tipoPregunta === "TX"
+          ) {
+            r = { ...r, tipoPregunta: true };
+          }
           return r;
         })()}
         //El hide es para ocultar los campos que no se quieren mostrar en el formulario
@@ -319,29 +379,14 @@ const usePreguntas = ({
             successMessage: null,
           }));
         }}
-        onClose={(confirm) => {
-          if (!["A", "B", "M"].includes(list.selection.request)) {
-            confirm = false;
-          }
-          if (!confirm) {
-            setList((prev) => ({
-              ...prev,
-              selection: {
-                ...prev.selection,
-                ...selectionDef,
-                index: prev.selection.index,
-                record:
-                  !prev.selection.multi && prev.selection.index > -1
-                    ? prev.data.at(prev.selection.index)
-                    : prev.selection.record,
-              },
-            }));
+        onClose={(confirm = false) => {
+          const requestType = list.selection.request;
+          if (confirm !== true || !["A", "B", "M"].includes(requestType)) {
+            closeQuestionForm();
             return;
           }
 
           const record = { ...list.selection.edit };
-
-          
 
           // Validaciones---------------------------------------
           const errors = {};
@@ -372,7 +417,7 @@ const usePreguntas = ({
 
 
 
-            if (Array.isArray(record.detalles)) {
+            if (record.tipoPregunta !== "TX" && Array.isArray(record.detalles)) {
               record.detalles.forEach((detalle, index) => {
                 if (!detalle.texto || detalle.texto.trim() === "") errors[`detalles[${index}].texto`] = "Dato requerido";
               });
@@ -396,7 +441,10 @@ const usePreguntas = ({
                             
                     
                         },
-              onError: async (error) => alert("Error al crear la encuesta: " + error.message),
+              onError: async (error) => {
+                setList((prev) => ({ ...prev, loading: null }));
+                alert("Error al guardar la pregunta: " + getErrorMessage(error));
+              },
           };
 
           switch (list.selection.request) {
@@ -404,7 +452,7 @@ const usePreguntas = ({
 
             case "A":
               query.action = "Create";
-              query.params = { id: record.seccionalId };
+              query.params = { id: list.params.id };
             
               // Generamos un ID único para la nueva pregunta
               const nuevaPregunta = {
@@ -413,7 +461,7 @@ const usePreguntas = ({
                 ordenPregunta: Number(record.ordenPregunta),
                 detalles:
                 record.tipoPregunta === "TX"
-                  ? [{ texto: "" }]
+                  ? []
                   : Array.isArray(record.detalles)
                     ? record.detalles.map(detalle => ({
                         texto: detalle.texto,
@@ -478,50 +526,36 @@ const usePreguntas = ({
                       console.log("Obtengo el ID de encuesta desde parámetro ->", list.params.id);
 
                       query.action = "Update";
-                      query.params = { id: record.seccionalId };
+                      query.params = { id: list.params.id };
 
-                      //Mantengo las preguntas anteriores y actualizamos solo la modificada
+                      // El endpoint admite únicamente el contrato de actualización
+                      // de preguntas; no se envían propiedades internas de la grilla.
                       const preguntasActualizadas = list.data.map((pregunta) =>
                         pregunta.id === record.id
-                          ? { //Si es la pregunta modificada, actualizamos los datos
+                          ? {
                               ...pregunta,
-                              encuestaId: record.encuestaId,
-                              ordenPregunta: Number(record.ordenPregunta),
+                              ordenPregunta: toInteger(record.ordenPregunta),
                               tipoPregunta: record.tipoPregunta,
                               enunciado: record.enunciado,
                               detalles:
                                 record.tipoPregunta === "TX"
-                                  ? [{ texto: record.textoLibre || "-" }]
+                                  ? []
                                 : Array.isArray(record.detalles)
                                     ? record.detalles.map(detalle => ({
-                                        encuestaPreguntaId: record.encuestaPreguntaId,
-                                        texto: detalle.texto || "-",
-                                        valorPorDefault: true,
-                                        esObligatorio: true,
-                                        id: detalle.id
+                                        id: toInteger(detalle.id),
+                                        texto: detalle.texto || "",
+                                        valorPorDefault: !!detalle.valorPorDefault,
+                                        esObligatorio: !!detalle.esObligatorio,
                                       }))
                                     : [],
-
-
                             }
-                          : pregunta //Si no es la pregunta modificada, la dejamos igual
+                          : pregunta
                       );
 
                       query.config.body = {
-                        fecha: record.fecha, 
-                        tema: record.tema, 
-                        fechaFinalizacion: record.fechaFinalizacion, 
-                        preguntas: preguntasActualizadas, // incluye todas las preguntas actualizadas
-                        id: list.params.id, // ID de la encuesta
+                        preguntas: preguntasActualizadas.map(toUpdateQuestion),
                       };
 
-
-                      //Actualizamos el estado manteniendo todas las preguntas pero con la modificada
-                      setList((prev) => ({
-                        ...prev,
-                        data: preguntasActualizadas,
-                        selection: { ...selectionDef }, // Reiniciamos la selección para evitar errores
-                      }));
 
                       break;
 
@@ -530,7 +564,7 @@ const usePreguntas = ({
 
               case "B":
                 query.action = "Delete";
-                query.params = { id: record.seccionalId };
+                query.params = { id: list.params.id };
             
                 //Filtramos las preguntas y eliminamos solo la pregunta seleccionada
                 const nuevasPreguntas = list.data.filter(p => p.id !== record.id);
@@ -550,13 +584,6 @@ const usePreguntas = ({
             
                
             
-                //Actualizamos el estado eliminando solo la pregunta seleccionada
-                setList((prev) => ({
-                    ...prev,
-                    data: nuevasPreguntas, // Quitamos solo la pregunta eliminada, sin afectar las demás
-                    selection: { ...selectionDef },
-                }));
-            
                 break;
             
 
@@ -569,11 +596,13 @@ const usePreguntas = ({
           
           // Para el caso "A" (agregar), no cerramos el modal
           if (list.selection.request === "A") {
+            setList((prev) => ({ ...prev, loading: "Guardando..." }));
             pushQuery(query);
             return; // Importante: evita que se cierre el modal
           }
           
-          // Para los demás casos (M, B), ejecutamos query y cerramos
+          // Para modificar o dar de baja, esperamos la confirmación del backend.
+          setList((prev) => ({ ...prev, loading: "Guardando..." }));
           pushQuery(query);
         }}
       />
