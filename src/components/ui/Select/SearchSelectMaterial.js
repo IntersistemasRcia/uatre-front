@@ -145,6 +145,8 @@ const SearchSelectMaterial = ({
 	autocompleteProps = {},
 	freeSolo = true,
 	autoSelect = false,
+	selectOnFocus = true,
+	clearOnBlur = false,
 	...x
 }) => {
 	const clearOption = defaultOption ?? { value: "", label: "" };
@@ -167,6 +169,8 @@ const SearchSelectMaterial = ({
 				disablePortal
 				freeSolo={freeSolo}
 				autoSelect={autoSelect}
+				selectOnFocus={selectOnFocus}
+				clearOnBlur={clearOnBlur}
 				renderOption={(props, option, state) => (
 					<li {...props} key={state.index}>
 						{typeof option === "string" ? option : option.label}
@@ -182,7 +186,8 @@ const SearchSelectMaterial = ({
 				inputValue={inputValue}
 				onInputChange={(event, newInputValue, reason) => {
 					if (onInputChange) onInputChange(newInputValue, reason);
-					else onTextChange(newInputValue);
+					else if (reason === "input" || reason === "clear") onTextChange(newInputValue);
+					else if (reason === "selectOption") onTextChange("");
 				}}
 				onChange={(event, newValue, reason) => {
 					if (reason === 'selectOption' || reason === 'clear' || reason === 'removeOption') {
