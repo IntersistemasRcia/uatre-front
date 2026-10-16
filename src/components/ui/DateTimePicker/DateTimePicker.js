@@ -143,7 +143,7 @@ const DateTimePicker = ({
 								? v?.format(format)
 								: v
 						);
-					else if (o?.isValid()) onChange(undefined);
+					else if (v === null && o?.isValid()) onChange(undefined);
 					return v;
 				})}
 				renderInput={myRenderInput}
