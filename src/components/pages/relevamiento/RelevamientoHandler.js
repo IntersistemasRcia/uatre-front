@@ -342,24 +342,13 @@ const RelevamientoHandler = () => {
   }, [pdf.reload, relevamientoList?.data]);
 
   const onCargaPDF = useCallback(() => {
-    console.log("=== onCargaPDF INICIADO ===");
-    console.log("Registro seleccionado:", relevamientoSelected);
-
     if (!relevamientoSelected) {
       setPdf((o) => ({ ...o, error: "Selecciona un registro para imprimir.", despliega: false }));
       return;
     }
 
-    // Imprimir solo el registro seleccionado
     const registroParaPDF = [relevamientoSelected];
 
-    console.log("=== ESTRUCTURA COMPLETA DEL REGISTRO SELECCIONADO ===");
-    Object.keys(relevamientoSelected).sort().forEach(key => {
-      console.log(`  ${key}: ${relevamientoSelected[key]}`);
-    });
-    console.log("=== FIN ESTRUCTURA ===");
-
-    // Abrir el PDF directamente
     setPdf((o) => ({
       ...o,
       data: registroParaPDF,

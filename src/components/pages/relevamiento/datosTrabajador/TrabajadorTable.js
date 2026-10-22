@@ -5,14 +5,7 @@ import FormatearFecha from "../../../helpers/FormatearFecha";
 import Formato from "components/helpers/Formato";
 
 const TrabajadorTable = ({ columns: columnsInit = [], data = [], ...x } = {}) => {
-  console.log(" [TrabajadorTable] Datos recibidos:", data);
-  console.log(" [TrabajadorTable] Cantidad de registros:", data?.length);
-
-  // Los datos ya están en el formato correcto, no necesitamos flatMap
-  // Solo verificamos que sea un array válido
   const formattedData = Array.isArray(data) ? data : [];
-  
-  console.log(" [TrabajadorTable] Datos formateados:", formattedData);
 
   const columns = [
     {
@@ -105,12 +98,6 @@ const TrabajadorTable = ({ columns: columnsInit = [], data = [], ...x } = {}) =>
       formatter: (cell) => cell === "S" ? "Sí" : "No",
     },
   ];
-
-  console.log(" [TrabajadorTable] Renderizando tabla con:", {
-    formattedData,
-    columns: columns.map(c => c.dataField),
-    propsRecibidas: { data, ...x }
-  });
 
   return (
     <Table

@@ -3,6 +3,7 @@ import Formato from "components/helpers/Formato";
 import Grid from "components/ui/Grid/Grid";
 import IM from "components/ui/Input/InputMaterial";
 import styles from "./TrabajadorDetails.module.css";
+import { respuestaSiNo } from "../../relevamientoFormatters";
 
 /** @type {IM} */
 const InputMaterial = (p) => <IM variant="standard" size="small" {...p} />;
@@ -73,6 +74,7 @@ const TrabajadorDetails = (props) => {
 							{/* Primera fila */}
 							<Grid className={styles.contenido} gap="1rem"> 
 								<Grid width> 
+									<InputMaterial label="¿Vive en el lugar?" value={validar(respuestaSiNo(data.viveEnElLugar))}/>
 									<InputMaterial label="EstadoVivienda"  value={validar(String(data.estadoVivienda ?? "").toUpperCase() === "B" ? "BUENA" : String(data.estadoVivienda ?? "").toUpperCase() === "M" ? "MALA" : "ACEPTABLE")}/>
 									<InputMaterial label="CantidadIntegrantes"  value={validar(data.cantidadIntegrantesVivienda)}/>
 									<InputMaterial label="Electricidad"  value={validar(String(data.serviciosElectricidad ?? "").toUpperCase() === "S" ? "SI" : "NO")}/>
@@ -168,7 +170,7 @@ const TrabajadorDetails = (props) => {
 										})()
 								}
 							/>
-							<InputMaterial label="Obserbaciones"   value={validar(!data.observacionesCondicionHabitacional ? "-" : data.observacionesCondicionHabitacional)}/>
+							<InputMaterial label="Observaciones"   value={validar(!data.observacionesCondicionHabitacional ? "-" : data.observacionesCondicionHabitacional)}/>
 							</Grid>
 						</Grid>
 					</Grid>					</Grid>
