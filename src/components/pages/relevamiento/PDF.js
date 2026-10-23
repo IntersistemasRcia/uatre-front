@@ -1,6 +1,7 @@
 import React from "react";
 import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
 import Formato from "components/helpers/Formato";
+import { cargoInspector, respuestaSiNo } from "./relevamientoFormatters";
 
 // Estilos para el PDF
 const styles = StyleSheet.create({
@@ -69,13 +70,6 @@ const styles = StyleSheet.create({
 	detalleValue: {
 		width: "65%",
 	},
-	observaciones: {
-		marginTop: 5,
-		padding: 5,
-		backgroundColor: "#fffacd",
-		fontSize: 7,
-		fontStyle: "italic",
-	},
 	footer: {
 		position: "absolute",
 		bottom: 15,
@@ -103,26 +97,10 @@ const DetalleItem = ({ label, value }) => (
 	</View>
 );
 
-const cargoInspector = (cargo) => {
-	switch (cargo) {
-		case "G": return "SEC.GENERAL";
-		case "A": return "SEC.ADJUNTO";
-		case "C": return "SEC.ACTAS";
-		case "S": return "SEC.ACC.SOC";
-		case "T": return "TESORERO";
-		case "D": return "DELEGADO";
-		default: return "-";
-	}
-};
-
 const PDF = ({ data = [], filtros = {} }) => {
 	const now = new Date();
 	const fechaImpresion = Formato.Fecha(now);
 	const horaImpresion = now.toLocaleTimeString("es-AR");
-
-	console.log("PDF Component - Datos recibidos:", data);
-	console.log("PDF Component - Cantidad de registros:", data.length);
-	console.log("PDF Component - Primer registro completo:", JSON.stringify(data[0], null, 2));
 
 	return (
 		<Document>
@@ -198,9 +176,11 @@ const PDF = ({ data = [], filtros = {} }) => {
 						<DetalleItem label="Equipamiento" value={item.equipamiento === "S" ? "SI" : "NO"} />
 						<DetalleItem label="Indumentaria" value={item.indumentariaTrab === "S" ? "SI" : "NO"} />
 						<DetalleItem label="Jornada Horario" value={item.jornadaHorarioDescripcion} />
+						<DetalleItem label="Observaciones" value={item.observacionCondicionLaboral} />
 						
 						{/* Condiciones Habitacionales */}
 						<Text style={styles.seccionTitulo}>CONDICIONES HABITACIONALES DEL TRABAJADOR</Text>
+						<DetalleItem label="¿Vive en el lugar?" value={respuestaSiNo(item.viveEnElLugar)} />
 						<DetalleItem label="Estado Vivienda" value={item.estadoVivienda === "B" ? "BUENA" : item.estadoVivienda === "M" ? "MALA" : "ACEPTABLE"} />
 						<DetalleItem label="Cantidad Integrantes" value={item.cantidadIntegrantesVivienda} />
 						<DetalleItem label="Electricidad" value={item.serviciosElectricidad === "S" ? "SI" : "NO"} />
@@ -213,22 +193,7 @@ const PDF = ({ data = [], filtros = {} }) => {
 						<DetalleItem label="Hijos Mayores" value={item.hijosMayores === "s" ? "SI" : item.hijos === "s" ? "NO" : "-"} />
 						<DetalleItem label="Hijos Mayores Trabajan" value={item.hijosMayoresTrabajan === "s" ? "SI" : item.hijosMayores === "s" ? "NO" : "-"} />
 						<DetalleItem label="Hijos Menores Escolarizados" value={item.hijosMenoresEscolarizados === "s" ? "SI" : "-"} />
-
-						{/* Observaciones */}
-						{(item.observacionCondicionLaboral || item.observacionesCondicionHabitacional) && (
-							<View style={styles.observaciones}>
-								{item.observacionCondicionLaboral && (
-									<Text style={{ marginBottom: 3 }}>
-										<Text style={{ fontWeight: "bold" }}>Obs. Cond. Laboral:</Text> {item.observacionCondicionLaboral}
-									</Text>
-								)}
-								{item.observacionesCondicionHabitacional && (
-									<Text>
-										<Text style={{ fontWeight: "bold" }}>Obs. Cond. Habitacional:</Text> {item.observacionesCondicionHabitacional}
-									</Text>
-								)}
-							</View>
-						)}
+						<DetalleItem label="Observaciones" value={item.observacionesCondicionHabitacional} />
 					</View>
 				))}
 

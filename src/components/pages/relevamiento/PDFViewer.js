@@ -15,10 +15,6 @@ const onCloseDef = () => {};
  * @param {Function} props.onClose Handler al cerrar el modal
  */
 const PDFViewer = ({ data, filtros = {}, onClose = onCloseDef }) => {
-	console.log("PDFViewer - Datos recibidos:", data);
-	console.log("PDFViewer - Cantidad:", data?.length);
-	console.log("PDFViewer - Filtros:", filtros);
-	
 	return (
 		<Modal size="xl" centered show>
 			<Modal.Header className={modalCss.modalCabecera}>

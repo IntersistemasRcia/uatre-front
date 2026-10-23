@@ -15,6 +15,7 @@ import SearchSelectMaterial, {
   mapOptions,
 } from "components/ui/Select/SearchSelectMaterial";
 import useQueryState from "components/hooks/useQueryState";
+import useQueryQueue from "components/hooks/useQueryQueue";
 import PDFViewer from "./PDFViewer";
 
 /* ================= Helpers ================= */ 
@@ -51,6 +52,12 @@ const seccionalesSelectOptions = ({ data = [], ...x }) =>
     ...x,
   });
 
+const detalleToPdfRows = (relevamiento = {}, trabajadores = []) => {
+  return trabajadores.length
+    ? trabajadores.map((trabajador) => ({ ...relevamiento, ...trabajador, id: relevamiento.id }))
+    : [relevamiento];
+};
+
 /* =============== Componente =============== */
 const RelevamientoHandler = () => {
   const dispatch = useDispatch();
@@ -59,6 +66,18 @@ const RelevamientoHandler = () => {
 
   const tarea = useTareasUsuario();
   const disableTabAutoridades = !tarea.hasTarea("Datos_SeccionalAutoridades");
+
+  const pushTrabajadoresQuery = useQueryQueue((action, params = {}) => {
+    switch (action) {
+      case "GetTrabajadores":
+        return {
+          config: { baseURL: "App", endpoint: "/FiscalizacionesTrabajador", method: "GET" },
+          params,
+        };
+      default:
+        return null;
+    }
+  });
 
   /* ---------- Selects: Delegación / Seccional ---------- */
   const [delegacionSelect, setDelegacionSelect] = useState({
@@ -295,12 +314,8 @@ const RelevamientoHandler = () => {
           className="botonAmarillo"
           loading={!!pdf.loading}
           onClick={onCargaPDF}
-          disabled={!relevamientoList?.data || relevamientoList.data.length === 0}
-          title={
-            !relevamientoList?.data || relevamientoList.data.length === 0
-              ? "Aplica filtros primero para generar el PDF"
-              : "Generar PDF con todos los datos visibles y detalles"
-          }
+          disabled={!relevamientoList?.data || relevamientoList.data.length === 0 || !!pdf.loading}
+          title="Generar PDF con el detalle del relevamiento seleccionado"
           style={{ width: "200px", height: "45px", fontSize: "14px" }}
         >
           IMPRIME
@@ -323,52 +338,67 @@ const RelevamientoHandler = () => {
 
   /* ---------- PDF ---------- */
   const [pdf, setPdf] = useState({
-    reload: null,
     loading: null,
     data: [],
     error: null,
     despliega: false,
   });
 
-  // Cargar datos para PDF con los datos ya filtrados por el backend
-  useEffect(() => {
-    if (!pdf.reload) return;
-    const datos = relevamientoList?.data || [];
-    if (datos.length === 0) {
-      setPdf((o) => ({ ...o, reload: false, loading: null, error: "No hay datos para generar el PDF", despliega: false }));
-      return;
-    }
-    setPdf((o) => ({ ...o, reload: false, loading: null, data: datos, despliega: true, error: null }));
-  }, [pdf.reload, relevamientoList?.data]);
-
   const onCargaPDF = useCallback(() => {
-    console.log("=== onCargaPDF INICIADO ===");
-    console.log("Registro seleccionado:", relevamientoSelected);
-
     if (!relevamientoSelected) {
       setPdf((o) => ({ ...o, error: "Selecciona un registro para imprimir.", despliega: false }));
       return;
     }
 
-    // Imprimir solo el registro seleccionado
-    const registroParaPDF = [relevamientoSelected];
+    setPdf((o) => ({ ...o, loading: "Preparando impresión...", error: null, despliega: false }));
+    const trabajadores = [];
+    const loadPage = (pageIndex) => {
+      pushTrabajadoresQuery({
+        action: "GetTrabajadores",
+        params: {
+          fiscalizacionesId: relevamientoSelected.id,
+          deleted: false,
+          pageIndex,
+          pageSize: 100,
+        },
+        onOk: async (response) => {
+          const pageData = Array.isArray(response) ? response : response?.data;
+          if (!Array.isArray(pageData)) {
+            setPdf((o) => ({
+              ...o,
+              loading: null,
+              error: "No fue posible leer los trabajadores para imprimir.",
+            }));
+            return;
+          }
 
-    console.log("=== ESTRUCTURA COMPLETA DEL REGISTRO SELECCIONADO ===");
-    Object.keys(relevamientoSelected).sort().forEach(key => {
-      console.log(`  ${key}: ${relevamientoSelected[key]}`);
-    });
-    console.log("=== FIN ESTRUCTURA ===");
+          trabajadores.push(...pageData);
+          const pages = Number(response?.pages ?? 1) || 1;
+          if (pageIndex < pages) {
+            loadPage(pageIndex + 1);
+            return;
+          }
 
-    // Abrir el PDF directamente
-    setPdf((o) => ({
-      ...o,
-      data: registroParaPDF,
-      despliega: true,
-      reload: false,
-      loading: null,
-      error: null,
-    }));
-  }, [relevamientoSelected]);
+          setPdf((o) => ({
+            ...o,
+            data: detalleToPdfRows(relevamientoSelected, trabajadores),
+            despliega: true,
+            loading: null,
+            error: null,
+          }));
+        },
+        onError: async (error) =>
+          setPdf((o) => ({
+            ...o,
+            loading: null,
+            despliega: false,
+            error: error?.message ?? "No fue posible obtener los trabajadores para imprimir.",
+          })),
+      });
+    };
+
+    loadPage(1);
+  }, [pushTrabajadoresQuery, relevamientoSelected]);
 
   /* ---------- Tabs ---------- */
   const [encuestaActions] = useState([]);
