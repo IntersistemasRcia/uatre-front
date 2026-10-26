@@ -3,13 +3,13 @@ import Formato from "components/helpers/Formato";
 import Grid from "components/ui/Grid/Grid";
 import IM from "components/ui/Input/InputMaterial";
 import styles from "./RelevamientoDetails.module.css";
+import { cargoInspector } from "../relevamientoFormatters";
 
 /** @type {IM} */
 const InputMaterial = (p) => <IM variant="standard" size="small" {...p} />;
 
 const RelevamientoDetails = (props) => {
  
-	console.log("config",props.config)
 	const config = props.config;
 	const data = config.data ?? {};
 	const tab = config.tab ?? 0;
@@ -40,26 +40,6 @@ const RelevamientoDetails = (props) => {
 	}
 
 
-	const cargoInsp = () => {
-		// Lógica para manejar el cargo del inspector
-		switch (data.inspectorCargo) {
-			case "G":
-				return "SEC.GENERAL";
-			case "A":
-				return "SEC.ADJUNTO";
-			case "C":
-				return "SEC.ACTAS";
-			case "S":
-				return "SEC.ACC.SOC";
-			case "T":
-				return "TESORERO";
-			case "D":
-				return "DELEGADO";
-			default:
-				return "-";
-		}
-	}
-
 	useEffect(() => {
 		switch (tab) {
 			case 0:
@@ -81,7 +61,7 @@ const RelevamientoDetails = (props) => {
 									{/* <InputMaterial label="Fecha de carga" width="8rem" value={validar(data.createdDate)}/> */}
 									<InputMaterial label="DE UATRE Apellido y Nombre" width="15rem" value={validar(!data.inspectorApellidoUATRE ? "-" : data.inspectorApellidoUATRE)}/>
 									<Grid grow><InputMaterial label="Dni"  width="10rem" value={validar(Formato.DNI(data.inspectorDNI))}/></Grid>
-									<Grid grow><InputMaterial label="Cargo"  width="10rem" value={cargoInsp()}/></Grid>
+									<Grid grow><InputMaterial label="Cargo"  width="10rem" value={cargoInspector(data.inspectorCargo)}/></Grid>
 									
 								</Grid>		
 							</Grid>
