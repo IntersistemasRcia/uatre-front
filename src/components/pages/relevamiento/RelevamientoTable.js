@@ -71,6 +71,14 @@ const columnsDef = [
 		sort: true,
 		headerStyle: () => ({ textAlign: "center" }),
 	},
+	{
+		headerTitle: () => `Estado`,
+		dataField: "estado",
+		text: "Estado",
+		sort: true,
+		formatter: (estado) => estado || "Registrada",
+		headerStyle: () => ({ textAlign: "center", width: "9rem" }),
+	},
 ].map((r) => ({
 	searchable: false,
 	headerTitle: () => r.text,

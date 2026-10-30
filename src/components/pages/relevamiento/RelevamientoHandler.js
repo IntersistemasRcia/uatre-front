@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useDispatch } from "react-redux";
 import { handleModuloSeleccionar } from "redux/actions";
 import { Tabs, Tab } from "@mui/material";
@@ -16,15 +16,38 @@ import SearchSelectMaterial, {
 } from "components/ui/Select/SearchSelectMaterial";
 import useQueryState from "components/hooks/useQueryState";
 import useQueryQueue from "components/hooks/useQueryQueue";
+import Action from "components/helpers/Action";
 import PDFViewer from "./PDFViewer";
+import RelevamientoForm from "./RelevamientoForm";
+import {
+  adaptarGestionRelevamiento,
+  crearIdempotencyKey,
+  cuitNumerico,
+  ESTADOS_RELEVAMIENTO,
+} from "./relevamientoGestionAdapter";
 
-/* ================= Helpers ================= */ 
-const norm = (v) => 
-  String(v ?? "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
-    .trim();
+const camposRelevamientoEditables = [
+  "actaNro", "fecha", "tipo", "localidadesId", "lugar", "seccionalId", "inspector", "inspectorDNI", "inspectorCargo",
+  "inspectorRenatre", "inspectorRenatreDNI", "organismoRenatre", "actaMinisterio", "actaRenatre", "actaReservin",
+];
+const camposTrabajadorEditables = [
+  "cuil", "dni", "apellido", "nombre", "inicioActividad", "actividad", "sexo", "contacto", "celular", "email",
+  "registrado", "equipamiento", "bienCategorizado", "jornadaHorarioId", "observacionesCondicionLaboral", "estadoVivienda",
+  "viveEnElLugar", "cantidadIntegrantesVivienda", "areaDescansoEquipada", "serviciosElectricidad", "serviciosGas",
+  "serviciosAguaPotable", "serviciosInternet", "hijos", "pareja", "parejaTrabaja", "parejaTrabajaIr", "hijosMayores",
+  "hijosMayoresTrabajan", "hijosMayoresTrabajanIr", "hijosMenoresEscolarizados", "jornadaHorarioDescripcion",
+  "observacionesCondicionHabitacional", "afiliado", "reciboDeSueldo", "indumentariaTrab", "tareaQueRealizaTrab", "consentimientoTrabajador",
+];
+const seleccionarCampos = (origen, campos) => Object.fromEntries(campos.filter((campo) => Object.prototype.hasOwnProperty.call(origen || {}, campo)).map((campo) => [campo, origen[campo]]));
+const entero = (valor) => Number(String(valor ?? "").replace(/\D/g, "")) || 0;
+const camposTrabajadorNumericos = new Set(["cuil", "dni", "celular", "jornadaHorarioId", "cantidadIntegrantesVivienda"]);
+const normalizarTrabajador = (trabajador) => Object.fromEntries(
+  Object.entries(seleccionarCampos(trabajador, camposTrabajadorEditables)).map(([campo, valor]) => [
+    campo,
+    camposTrabajadorNumericos.has(campo) ? entero(valor) : campo === "inicioActividad" ? valor || null : valor,
+  ])
+);
+const datosCatalogo = (respuesta) => Array.isArray(respuesta) ? respuesta : Array.isArray(respuesta?.data) ? respuesta.data : [];
 
 const delegacionSelectDef = { label: "Todas" };
 const delegacionesSelectOptions = ({ data = [], ...x }) =>
@@ -66,6 +89,20 @@ const RelevamientoHandler = () => {
 
   const tarea = useTareasUsuario();
   const disableTabAutoridades = !tarea.hasTarea("Datos_SeccionalAutoridades");
+  const puedeConsultar = tarea.hasTarea("Relevamiento_Consulta", "Administrador Relevamiento") || tarea.hasTarea("Relevamiento_Modifica", "Administrador Relevamiento") || tarea.hasTarea("Relevamiento_Tabla", "Administrador Relevamiento");
+  const puedeModificar = tarea.hasTarea("Relevamiento_Modifica", "Administrador Relevamiento") || tarea.hasTarea("Relevamiento_Tabla", "Administrador Relevamiento");
+  const [modalMode, setModalMode] = useState(null);
+  const [gestiones, setGestiones] = useState({});
+  const [gestionLoading, setGestionLoading] = useState(false);
+  const [gestionError, setGestionError] = useState(null);
+  const [catalogosEdicion, setCatalogosEdicion] = useState({
+    loading: true,
+    seccionales: [],
+    localidades: [],
+    jornadas: [],
+    errores: [],
+  });
+  const idempotencyKeysRef = React.useRef(new Map());
 
   const pushTrabajadoresQuery = useQueryQueue((action, params = {}) => {
     switch (action) {
@@ -78,6 +115,115 @@ const RelevamientoHandler = () => {
         return null;
     }
   });
+
+  const pushGestionQuery = useQueryQueue((action, params = {}) => {
+    switch (action) {
+      case "GetGestion":
+        return {
+          config: { baseURL: "App", endpoint: `/Fiscalizaciones/${params.id}/gestion`, method: "GET" },
+          params: {},
+        };
+      case "GetTrabajadores":
+        return {
+          config: { baseURL: "App", endpoint: "/FiscalizacionesTrabajador", method: "GET" },
+          params,
+        };
+      case "OperacionGestion":
+        return {
+          config: {
+            baseURL: "App",
+            endpoint: `/Fiscalizaciones/${params.id}/operaciones`,
+            method: "POST",
+            headers: { "Idempotency-Key": params.idempotencyKey },
+            body: params.body,
+          },
+          params: {},
+        };
+      case "ActualizarTrabajador":
+        return {
+          config: { baseURL: "App", endpoint: `/FiscalizacionesTrabajador/${params.id}`, method: "PUT", body: params.body, okType: "response" },
+          params: {},
+        };
+      case "ActualizarFiscalizacion":
+        return {
+          config: {
+            baseURL: "App",
+            endpoint: `/Fiscalizaciones/${params.id}`,
+            method: "PUT",
+            body: params.body,
+          },
+          params: {},
+        };
+      case "GetJornadas":
+        return {
+          config: { baseURL: "App", endpoint: "/JornadaHorario", method: "GET" },
+          params: { deleted: false, page: "1,1000" },
+        };
+      case "GetLocalidadesCatalogo":
+        return {
+          config: { baseURL: "Afiliaciones", endpoint: "/RefLocalidad", method: "GET" },
+          params: {},
+        };
+      case "GetSeccionalesCatalogo":
+        return {
+          config: {
+            baseURL: "Afiliaciones",
+            endpoint: "/Seccional/GetSeccionalesSpecs",
+            method: "POST",
+            body: { soloActivos: true, pageIndex: params.pageIndex || 1, pageSize: 50 },
+          },
+          params: {},
+        };
+      default:
+        return null;
+    }
+  });
+
+  const requestGestion = useCallback(
+    (action, params = {}) => new Promise((resolve, reject) => {
+      pushGestionQuery({ action, params, onOk: resolve, onError: reject });
+    }),
+    [pushGestionQuery]
+  );
+
+  useEffect(() => {
+    let activo = true;
+
+    const cargarSeccionalesCatalogo = async () => {
+      const seccionales = [];
+      let pagina = 1;
+      let totalPaginas = 1;
+
+      do {
+        const respuesta = await requestGestion("GetSeccionalesCatalogo", { pageIndex: pagina });
+        seccionales.push(...datosCatalogo(respuesta));
+        totalPaginas = Number(respuesta?.pages) || 1;
+        pagina += 1;
+      } while (pagina <= totalPaginas);
+
+      return seccionales;
+    };
+
+    Promise.allSettled([
+      requestGestion("GetJornadas"),
+      requestGestion("GetLocalidadesCatalogo"),
+      cargarSeccionalesCatalogo(),
+    ]).then(([jornadas, localidades, seccionales]) => {
+      if (!activo) return;
+      const resultados = [jornadas, localidades, seccionales];
+      setCatalogosEdicion({
+        loading: false,
+        jornadas: jornadas.status === "fulfilled" ? datosCatalogo(jornadas.value) : [],
+        localidades: localidades.status === "fulfilled" ? datosCatalogo(localidades.value) : [],
+        seccionales: seccionales.status === "fulfilled" ? datosCatalogo(seccionales.value) : [],
+        errores: resultados.filter((resultado) => resultado.status === "rejected").map((resultado) => resultado.reason?.message || "No se pudo cargar un catálogo."),
+      });
+    });
+
+    return () => {
+      activo = false;
+    };
+  }, [requestGestion]);
 
   /* ---------- Selects: Delegación / Seccional ---------- */
   const [delegacionSelect, setDelegacionSelect] = useState({
@@ -300,6 +446,9 @@ const RelevamientoHandler = () => {
     selected: relevamientoSelected,
     list: relevamientoList,
   } = useRelevamiento({
+    columns: (columns) => columns.map((column) => column.dataField === "estado"
+      ? { ...column, formatter: (estado, record) => gestiones[record.id]?.estado || record.estadoRelevamiento || estado || ESTADOS_RELEVAMIENTO.REGISTRADA }
+      : column),
     onEditComplete: ({ request, response }) => {
       if (request === "A" && response?.id) {
         relevamientoChanger("list", {
@@ -308,23 +457,151 @@ const RelevamientoHandler = () => {
         });
       }
     },
-    renderExtraActions: () => (
-      <>
-        <Button
-          className="botonAmarillo"
-          loading={!!pdf.loading}
-          onClick={onCargaPDF}
-          disabled={!relevamientoList?.data || relevamientoList.data.length === 0 || !!pdf.loading}
-          title="Generar PDF con el detalle del relevamiento seleccionado"
-          style={{ width: "200px", height: "45px", fontSize: "14px" }}
-        >
-          IMPRIME
-        </Button>
-        {pdf.loading && <div style={{ color: "green", marginTop: "10px" }}>{pdf.loading}</div>}
-        {pdf.error && <div style={{ color: "red", marginTop: "10px" }}>{pdf.error}</div>}
-      </>
-    ),
   });
+
+  const relevamientoGestion = useMemo(
+    () => relevamientoSelected
+      ? gestiones[relevamientoSelected.id] || adaptarGestionRelevamiento({
+        relevamiento: relevamientoSelected,
+        estado: relevamientoSelected.estadoRelevamiento,
+      })
+      : null,
+    [gestiones, relevamientoSelected]
+  );
+
+  const obtenerGestion = useCallback(async (id, relevamientoAlternativo = null) => {
+    let gestion;
+
+    try {
+      gestion = await requestGestion("GetGestion", { id });
+    } catch (error) {
+      if (!relevamientoAlternativo) throw error;
+      gestion = {
+        relevamiento: relevamientoAlternativo,
+        estado: relevamientoAlternativo.estadoRelevamiento,
+      };
+    }
+
+    let trabajadores = null;
+
+    try {
+      const respuestaTrabajadores = await requestGestion("GetTrabajadores", {
+        fiscalizacionesId: id,
+        deleted: false,
+        pageIndex: 1,
+        pageSize: 500,
+      });
+      trabajadores = Array.isArray(respuestaTrabajadores) ? respuestaTrabajadores : respuestaTrabajadores?.data;
+    } catch {
+      trabajadores = null;
+    }
+
+    return adaptarGestionRelevamiento(gestion, Array.isArray(trabajadores) ? trabajadores : null);
+  }, [requestGestion]);
+
+  const recargarListado = useCallback(() => {
+    relevamientoChanger("list", { onLoadSelect: onLoadSelectKeepOrFirst });
+  }, [relevamientoChanger]);
+
+  const abrirSeguimiento = useCallback(async (mode) => {
+    if (!relevamientoSelected) return;
+    setModalMode(mode);
+    setGestionLoading(true);
+    setGestionError(null);
+    try {
+      const gestion = await obtenerGestion(relevamientoSelected.id, relevamientoSelected);
+      setGestiones((actuales) => ({ ...actuales, [relevamientoSelected.id]: gestion }));
+    } catch (error) {
+      setGestionError(error?.message || "No fue posible obtener el seguimiento del relevamiento.");
+    } finally {
+      setGestionLoading(false);
+    }
+  }, [obtenerGestion, relevamientoSelected]);
+
+  const guardarGestion = useCallback((actualizado) => {
+    setGestiones((actuales) => ({ ...actuales, [actualizado.id]: actualizado }));
+    recargarListado();
+  }, [recargarListado]);
+
+  const operarGestion = useCallback(async (tipo, datos = {}, versionActual = null) => {
+    if (!relevamientoSelected) throw new Error("Seleccioná un relevamiento.");
+    setGestionLoading(true);
+    setGestionError(null);
+    const version = versionActual || gestiones[relevamientoSelected.id]?.version || "";
+    const operationId = JSON.stringify({ id: relevamientoSelected.id, tipo, version, datos });
+    const idempotencyKey = idempotencyKeysRef.current.get(operationId) || crearIdempotencyKey();
+    idempotencyKeysRef.current.set(operationId, idempotencyKey);
+    try {
+      const gestion = await requestGestion("OperacionGestion", {
+        id: relevamientoSelected.id,
+        idempotencyKey,
+        body: { tipo, version, ...datos },
+      });
+      const actualizado = adaptarGestionRelevamiento(gestion);
+      setGestiones((actuales) => ({ ...actuales, [relevamientoSelected.id]: actualizado }));
+      idempotencyKeysRef.current.delete(operationId);
+      return actualizado;
+    } finally {
+      setGestionLoading(false);
+    }
+  }, [gestiones, relevamientoSelected, requestGestion]);
+
+  const guardarDatosPrincipales = useCallback(async (editado) => {
+    if (!relevamientoSelected) throw new Error("Seleccioná un relevamiento.");
+    const establecimiento = editado.establecimiento || {};
+    return operarGestion("ACTUALIZAR_DATOS_PRINCIPALES", {
+      datosPrincipales: {
+        ...seleccionarCampos(editado, camposRelevamientoEditables),
+          actaNro: entero(editado.actaNro),
+          localidadesId: entero(editado.localidadesId),
+          lugar: entero(editado.lugar),
+          seccionalId: entero(editado.seccionalId),
+          inspectorDNI: entero(editado.inspectorDNI),
+          inspectorRenatreDNI: entero(editado.inspectorRenatreDNI),
+          actaMinisterio: entero(editado.actaMinisterio),
+          actaRenatre: entero(editado.actaRenatre),
+          actaReservin: entero(editado.actaReservin),
+          establecimientoRazonSocial: editado.empleador?.razonSocial || null,
+          establecimientoCUIT: cuitNumerico(editado.empleador?.cuit),
+          establecimientoActividad: establecimiento.actividad || null,
+          establecimientoSector: establecimiento.sector || null,
+          establecimientoLocalidadesId: entero(establecimiento.localidadesId),
+          establecimientoLugar: establecimiento.lugar || null,
+          establecimientoResponsable: establecimiento.responsable || null,
+          establecimientoResponsableDNI: entero(establecimiento.responsableDNI),
+          establecimientoContacto: establecimiento.contacto || null,
+          establecimientoContactoCelular: entero(establecimiento.contactoCelular),
+          establecimientoContactoEmail: establecimiento.contactoEmail || null,
+          establecimientoBotiquin: establecimiento.botiquin || null,
+          establecimientoBanos: establecimiento.banos || null,
+          establecimientoBanosUbicacion: establecimiento.banosUbicacion || null,
+          establecimientoAccesibilidad: establecimiento.accesibilidad || null,
+          establecimientoAreaDescansoEquipada: establecimiento.areaDescansoEquipada || null,
+          establecimientoServiciosElectricidad: establecimiento.serviciosElectricidad || null,
+          establecimientoServiciosElectricidadTipo: establecimiento.serviciosElectricidadTipo || null,
+          establecimientoServiciosGas: establecimiento.serviciosGas || null,
+          establecimientoServiciosGasTipo: establecimiento.serviciosGasTipo || null,
+          establecimientoServiciosAguaPotable: establecimiento.serviciosAguaPotable || null,
+          establecimientoServiciosAguaPotableTipo: establecimiento.serviciosAguaPotableTipo || null,
+          establecimientoServiciosInternet: establecimiento.serviciosInternet || null,
+      },
+    }, editado.version);
+  }, [operarGestion, relevamientoSelected]);
+
+  const guardarTrabajador = useCallback(async (trabajador) => {
+    if (!relevamientoSelected || !trabajador?.id) throw new Error("No se encontró el trabajador a actualizar.");
+    setGestionLoading(true);
+    setGestionError(null);
+    try {
+      await requestGestion("ActualizarTrabajador", { id: trabajador.id, body: normalizarTrabajador(trabajador) });
+      const actualizado = await obtenerGestion(relevamientoSelected.id, relevamientoSelected);
+      setGestiones((actuales) => ({ ...actuales, [relevamientoSelected.id]: actualizado }));
+      recargarListado();
+      return actualizado;
+    } finally {
+      setGestionLoading(false);
+    }
+  }, [obtenerGestion, recargarListado, relevamientoSelected, requestGestion]);
 
   // Activa la carga de delegaciones solo la primera vez que Fiscalizaciones termina
   const delegacionesLoadedRef = React.useRef(false);
@@ -336,7 +613,6 @@ const RelevamientoHandler = () => {
   }, [relevamientoList.loading]);
 
 
-  /* ---------- PDF ---------- */
   const [pdf, setPdf] = useState({
     loading: null,
     data: [],
@@ -346,10 +622,9 @@ const RelevamientoHandler = () => {
 
   const onCargaPDF = useCallback(() => {
     if (!relevamientoSelected) {
-      setPdf((o) => ({ ...o, error: "Selecciona un registro para imprimir.", despliega: false }));
+      setPdf((actual) => ({ ...actual, error: "Seleccioná un registro para imprimir.", despliega: false }));
       return;
     }
-
     setPdf((o) => ({ ...o, loading: "Preparando impresión...", error: null, despliega: false }));
     const trabajadores = [];
     const loadPage = (pageIndex) => {
@@ -400,8 +675,15 @@ const RelevamientoHandler = () => {
     loadPage(1);
   }, [pushTrabajadoresQuery, relevamientoSelected]);
 
-  /* ---------- Tabs ---------- */
-  const [encuestaActions] = useState([]);
+  const encuestaActions = useMemo(() => {
+    const createAction = ({ action, onExecute, ...props }) => new Action({ name: action, onExecute, combination: "AltKey", ...props });
+    const descripcion = relevamientoSelected?.id || "";
+    return [
+      createAction({ action: `Consulta Relevamiento nro. ${descripcion}`, onExecute: () => abrirSeguimiento("view"), keys: "o", underlineindex: 1, disabled: !relevamientoSelected || !puedeConsultar }),
+      createAction({ action: `Modifica Relevamiento nro. ${descripcion}`, onExecute: () => abrirSeguimiento("modify"), keys: "m", underlineindex: 0, disabled: !relevamientoSelected || !puedeModificar }),
+      createAction({ action: "Imprime", onExecute: onCargaPDF, keys: "i", underlineindex: 0, disabled: !relevamientoSelected || !!pdf.loading }),
+    ];
+  }, [abrirSeguimiento, onCargaPDF, pdf.loading, puedeConsultar, puedeModificar, relevamientoSelected]);
 
   tabs.push({
     header: () => <Tab label="RELEVAMIENTOS" />,
@@ -482,7 +764,7 @@ const RelevamientoHandler = () => {
   /* ---------- MODULO + ACCIONES ---------- */
   const acciones = tabs[tab].actions;
   useEffect(() => {
-    dispatch(handleModuloSeleccionar({ nombre: "Seccionales", acciones }));
+    dispatch(handleModuloSeleccionar({ nombre: "Relevamiento", acciones }));
   }, [dispatch, acciones, tab]);
 
   /* ---------- Aplicar / Limpiar filtros ---------- */
@@ -531,7 +813,6 @@ const RelevamientoHandler = () => {
     });
   };
 
-  /* ------------------- UI ------------------- */
   const pdfRender = !pdf.despliega ? null : (
     <PDFViewer
       data={pdf.data}
@@ -542,7 +823,7 @@ const RelevamientoHandler = () => {
         fechaDesde,
         fechaHasta,
       }}
-      onClose={() => setPdf((o) => ({ ...o, despliega: false }))}
+      onClose={() => setPdf((actual) => ({ ...actual, despliega: false }))}
     />
   );
 
@@ -638,6 +919,21 @@ const RelevamientoHandler = () => {
         ))}
       </Grid>
 
+      {modalMode && relevamientoGestion && (
+        <RelevamientoForm
+          record={relevamientoGestion}
+          mode={modalMode === "modify" ? "M" : "C"}
+          canModify={puedeModificar}
+          loading={gestionLoading}
+          externalError={gestionError}
+          onClose={() => setModalMode(null)}
+          onOperation={operarGestion}
+          onSave={guardarGestion}
+          onSaveData={guardarDatosPrincipales}
+          onSaveWorker={guardarTrabajador}
+          catalogos={catalogosEdicion}
+        />
+      )}
       {pdfRender}
       <KeyPress items={acciones} />
     </Grid>
