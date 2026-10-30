@@ -29,7 +29,7 @@ const Inicio = () => {
 	tareas.hasTarea("GestionOsprera_Tabla", "Administrador OS")  &&  accesos.push(<Button className="botonAmarillo" onClick={() => navigate("GestionOS")}     ><>Gestión de <text className="underline">O</text>bra Social</></Button>);
 	tareas.hasTarea("App_Tabla", "Administrador App")  &&   accesos.push(<Button className="botonAmarillo" onClick={() => navigate("App")}     ><>Administración A<text className="underline">p</text>p</></Button>);
 	tareas.hasTarea("Denuncias_Tabla")  && accesos.push(<Button className="botonAmarillo" onClick={() => navigate("Denuncias")}><text className="underline">D</text>enuncias</Button>);
-	tareas.hasTarea("Relevamiento_Tabla", "Administrador Relevamiento") && accesos.push(<Button className="botonAmarillo" onClick={() => navigate("Relevamiento")}     ><><text className="underline">R</text>elevamiento de Trabajadores</></Button>);
+	(tareas.hasTarea("Relevamiento_Consulta", "Administrador Relevamiento") || tareas.hasTarea("Relevamiento_Modifica", "Administrador Relevamiento") || tareas.hasTarea("Relevamiento_Tabla", "Administrador Relevamiento")) && accesos.push(<Button className="botonAmarillo" onClick={() => navigate("Relevamiento")}     ><><text className="underline">R</text>elevamiento de Trabajadores</></Button>);
 
 	console.log("accesos",accesos)
 	const [botonesAccesos, setBotonesAccesos] = useState(accesos)

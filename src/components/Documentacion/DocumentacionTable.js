@@ -1,6 +1,5 @@
 import React from "react";
 import Table from "../ui/Table/Table";
-import Formato from "components/helpers/Formato";
 
 const selectionOnSelectDef = (_row, _isSelect, _index, _e) => {};
 
@@ -8,6 +7,9 @@ const DocumentacionTable = ({
 	tipoList = [],
 	data: initData = [],
 	selection: initSelection = { onSelect: selectionOnSelectDef },
+	onDownload = null,
+	disableDownload = false,
+	formatDocumentType = null,
 	...x
 }) => {
 	const data = [];
@@ -30,22 +32,41 @@ const DocumentacionTable = ({
 		textOverflow: "ellipsis",
 		whiteSpace: "nowrap",
 	};
+	const tipoDocumental = (value) =>
+		tipoList.find((tipo) => String(tipo.id) === String(value.refTipoDocumentacionId))
+			?.descripcion ?? value.refTipoDocumentacionDescripcion ?? value.refTipoDocumentacion ?? "";
 	const columns = [
 		{
 			dataField: "refTipoDocumentacionId",
 			isDummyField: true,
 			text: "Tipo Documentación",
 			headerStyle: (_colum, _colIndex) => ({ width: "100px" }),
-			formatter: (_cell, row, _rowIndex, _formatExtraDatas) =>
-				tipoList.find((r) => r.id === row.value.refTipoDocumentacionId)
-					?.descripcion ?? "",
+			formatter: (_cell, row) => {
+				const tipo = tipoDocumental(row.value);
+				return formatDocumentType ? formatDocumentType(tipo, row.value) : tipo;
+			},
 			style: { ...cs },
 		},
 		{
 			dataField: "value",
 			text: "Nombre del Archivo",
 			headerStyle: (_colum, _colIndex) => ({ width: "100px" }),
-			formatter: (v) => v.nombreArchivo ?? "",
+			formatter: (value) => {
+				const nombreArchivo = value.nombreArchivo ?? "";
+				if (!onDownload || !value.documentoId || disableDownload) return nombreArchivo;
+				return (
+					<a
+						href="#descargar-documento"
+						onClick={(event) => {
+							event.preventDefault();
+							event.stopPropagation();
+							onDownload(value);
+						}}
+					>
+						{nombreArchivo}
+					</a>
+				);
+			},
 			style: { ...cs },
 		},
 		/*{ se quita esta columna a pedido de Fer https://trello.com/c/GnQ8h9e6/763-uatregestion-osprera30-04-2025incidencia

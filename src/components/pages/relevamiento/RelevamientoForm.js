@@ -15,13 +15,46 @@ import { destinosEstado, ESTADOS_RELEVAMIENTO } from "./relevamientoGestionAdapt
 import RelevamientoGeoubicacion from "./RelevamientoGeoubicacion";
 
 const estados = Object.values(ESTADOS_RELEVAMIENTO);
+const tiposDocumentacionRelevamiento = [
+  "Credencial",
+  "Documento de Identidad",
+  "Actas",
+  "Documentos",
+  "Recibos",
+  "Fotos",
+  "Otros",
+];
 const fecha = (value) => value && !Number.isNaN(new Date(value).getTime()) ? new Intl.DateTimeFormat("es-AR", { dateStyle: "short", timeStyle: "medium" }).format(new Date(value)) : "";
 const fechaInput = (value) => value ? String(value).slice(0, 10) : "";
 const documentoBase64 = (item) => String(item?.archivo ?? item?.archivoBase64 ?? item?.base64 ?? "").split(",").at(-1);
-const documentosDelRelevamiento = (record) => (record.novedades || []).filter((item) => item.tipo === "Documento").map((item) => ({ id: item.id, nombreArchivo: item.nombreArchivo, observaciones: item.detalle, refTipoDocumentacion: item.tipoDocumental }));
+const documentoIdPersistido = (value) => {
+  const match = String(value || "").match(/(?:^|-)documento-(\d+)$/i);
+  return match ? Number(match[1]) : null;
+};
+const formatoArchivo = (nombreArchivo) => {
+  const nombre = String(nombreArchivo || "").trim();
+  const extension = nombre.split(".").pop()?.toLowerCase();
+  if (!extension || extension === nombre.toLowerCase()) return "";
+  if (extension === "pdf") return "PDF";
+  if (["doc", "docx"].includes(extension)) return "Word";
+  if (["xls", "xlsx"].includes(extension)) return "Excel";
+  return extension.toUpperCase();
+};
+const tipoDocumentacionConFormato = (tipo, documento) => {
+  if (String(tipo || "").toLowerCase() !== "otros") return tipo;
+  const formato = formatoArchivo(documento?.nombreArchivo);
+  return formato ? `${tipo} - ${formato}` : tipo;
+};
+const documentosDelRelevamiento = (record) => (record.novedades || []).filter((item) => item.tipo === "Documento").map((item) => ({ id: item.id, documentoId: documentoIdPersistido(item.id), nombreArchivo: item.nombreArchivo, observaciones: item.detalle, refTipoDocumentacion: item.tipoDocumental }));
 const opcion = (value, label, aliases = []) => ({ value, label, aliases });
 const sinDato = (value) => value == null || value === "" || value === 0;
 const esSi = (value) => value === true || String(value || "").toUpperCase() === "S";
+const mensajeError = (error, fallback) => String(error?.message || fallback);
+const esErrorReintentable = (error) => {
+  const codigo = Number(error?.code);
+  const mensaje = mensajeError(error, "").toLowerCase();
+  return !codigo || codigo >= 500 || mensaje.includes("actualizado por otro usuario");
+};
 const opcionesEstaticas = {
   tipoRelevamiento: [
     opcion("P", "Programado"),
@@ -137,12 +170,14 @@ const trabajadorObservacionesHabitacionales = [
   { key: "observacionesCondicionHabitacional", label: "Observaciones", multiline: true },
 ];
 
-const RelevamientoForm = ({ record, mode, canModify, loading, externalError, onClose, onOperation, onSave, onSaveData, onSaveWorker, catalogos }) => {
+const RelevamientoForm = ({ record, mode, canModify, loading, externalError, onClose, onOperation, onSave, onSaveData, onSaveWorker, onDownloadDocument, catalogos }) => {
   const [selectedTab, setSelectedTab] = useState(0);
   const [edit, setEdit] = useState(record);
   const [trabajadorEdit, setTrabajadorEdit] = useState({});
   const [estadoDestino, setEstadoDestino] = useState(null);
   const [acuerdoSeleccionado, setAcuerdoSeleccionado] = useState(null);
+  const [fechaAudiencia, setFechaAudiencia] = useState(null);
+  const [audienciaRealizadaSeleccionada, setAudienciaRealizadaSeleccionada] = useState(null);
   const [observacion, setObservacion] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -156,6 +191,7 @@ const RelevamientoForm = ({ record, mode, canModify, loading, externalError, onC
   const editable = mode === "M" && canModify && record.estado === ESTADOS_RELEVAMIENTO.REGISTRADA;
   const puedeGestionarEstados = mode === "M" && canModify && record.estado !== ESTADOS_RELEVAMIENTO.FINALIZADA;
   const puedeGestionarAnexos = mode === "M" && canModify;
+  const puedeRegistrarAcuerdo = [ESTADOS_RELEVAMIENTO.COMPLETADA, ESTADOS_RELEVAMIENTO.INCOMPLETA].includes(record.estado);
   const destinos = useMemo(() => destinosEstado(record.estado, record.huboAcuerdo), [record.estado, record.huboAcuerdo]);
   const puedeCambiarEstado = puedeGestionarEstados && destinos.length > 0;
   const opcionesDestino = useMemo(() => mapOptions({ data: destinos, map: (item) => ({ value: item, label: item }) }), [destinos]);
@@ -193,6 +229,11 @@ const RelevamientoForm = ({ record, mode, canModify, loading, externalError, onC
   useEffect(() => {
     setAcuerdoSeleccionado(record.huboAcuerdo == null ? null : opcionesEstaticas.acuerdo.find((opcionAcuerdo) => opcionAcuerdo.value === record.huboAcuerdo) || null);
   }, [record.estado, record.huboAcuerdo]);
+
+  useEffect(() => {
+    setFechaAudiencia(fechaInput(record.fechaAudiencia) || null);
+    setAudienciaRealizadaSeleccionada(record.audienciaSeRealizo == null ? null : opcionesEstaticas.acuerdo.find((opcionAudiencia) => opcionAudiencia.value === record.audienciaSeRealizo) || null);
+  }, [record.estado, record.fechaAudiencia, record.audienciaSeRealizo]);
 
   const ejecutar = async (accion, mensaje) => {
     try {
@@ -234,6 +275,20 @@ const RelevamientoForm = ({ record, mode, canModify, loading, externalError, onC
     }
     await ejecutar(() => onOperation("REGISTRAR_ACUERDO", { huboAcuerdo: acuerdoSeleccionado.value }), `Se registró que ${acuerdoSeleccionado.value ? "hubo" : "no hubo"} acuerdo.`);
   };
+  const guardarDatosAudiencia = async () => {
+    if (!fechaAudiencia) {
+      setError("Indicá la fecha de audiencia antes de guardar.");
+      return;
+    }
+    if (typeof audienciaRealizadaSeleccionada?.value !== "boolean") {
+      setError("Indicá si la audiencia se realizó antes de guardar.");
+      return;
+    }
+    await ejecutar(
+      () => onOperation("REGISTRAR_DATOS_AUDIENCIA", { fechaAudiencia, audienciaSeRealizo: audienciaRealizadaSeleccionada.value }),
+      "Los datos de la audiencia se registraron correctamente."
+    );
+  };
   const agregarObservacion = () => ejecutar(() => onOperation("AGREGAR_OBSERVACION", { observaciones: [observacion.trim()] }), "La observación se registró correctamente.").then((actualizado) => { if (actualizado) setObservacion(""); });
   const cambiarDocumentacion = ({ index, item }) => {
     if (index != null) {
@@ -257,13 +312,20 @@ const RelevamientoForm = ({ record, mode, canModify, loading, externalError, onC
 
     let gestionActual = record;
     let documentosConfirmados = 0;
+    const errores = [];
     setError("");
     setSuccess("");
-    try {
-      for (const documento of documentosPendientes) {
+    for (const documento of documentosPendientes) {
+      const refTipoDocumentacionId = Number(documento.refTipoDocumentacionId);
+      if (!Number.isInteger(refTipoDocumentacionId) || refTipoDocumentacionId <= 0) {
+        errores.push(`${documento.nombreArchivo || "El documento"}: seleccioná un tipo de documentación válido.`);
+        setDocumentosPendientes((actual) => actual.filter((item) => item.id !== documento.id));
+        continue;
+      }
+      try {
         const actualizado = await onOperation("ADJUNTAR_DOCUMENTO", {
           documento: {
-            refTipoDocumentacionId: documento.refTipoDocumentacionId || 17,
+            refTipoDocumentacionId,
             archivo: documentoBase64(documento),
             nombreArchivo: documento.nombreArchivo,
             observaciones: documento.observaciones,
@@ -272,12 +334,18 @@ const RelevamientoForm = ({ record, mode, canModify, loading, externalError, onC
         gestionActual = actualizado;
         documentosConfirmados += 1;
         setDocumentosPendientes((actual) => actual.filter((item) => item.id !== documento.id));
+        onSave(actualizado);
+      } catch (exception) {
+        const mensaje = mensajeError(exception, "No se pudo registrar la documentación.");
+        errores.push(`${documento.nombreArchivo || "El documento"}: ${mensaje}`);
+        if (esErrorReintentable(exception)) break;
+        setDocumentosPendientes((actual) => actual.filter((item) => item.id !== documento.id));
       }
-      if (gestionActual) onSave(gestionActual);
-      setSuccess(`${documentosConfirmados === 1 ? "El documento se registró" : `Se registraron ${documentosConfirmados} documentos`} correctamente.`);
-    } catch (exception) {
-      setError(exception?.message || "No se pudo registrar la documentación. Los documentos pendientes se conservan para reintentar.");
     }
+    if (documentosConfirmados) {
+      setSuccess(`${documentosConfirmados === 1 ? "El documento se registró" : `Se registraron ${documentosConfirmados} documentos`} correctamente.`);
+    }
+    if (errores.length) setError(errores.join(" "));
   };
 
   const opcionesPorCatalogo = useMemo(() => ({
@@ -354,11 +422,27 @@ const RelevamientoForm = ({ record, mode, canModify, loading, externalError, onC
         </Grid></Accordion.Body></Accordion.Item></Accordion>;
       })}
     </>)}
-    {puedeGestionarAnexos && <Grid className={css.group} col gap="10px"><Grid className={css.titulo}>Cambio de estado</Grid><SearchSelectMaterial label="Estado" value={estadoSeleccionado} options={opcionesEstado} onChange={seleccionarEstado} readOnly={loading || !puedeGestionarEstados || (record.estado === ESTADOS_RELEVAMIENTO.COMPLETADA && record.huboAcuerdo == null)} freeSolo={false} autocompleteProps={{ isOptionEqualToValue: (option, value) => String(option?.value) === String(value?.value) }} />{record.estado === ESTADOS_RELEVAMIENTO.COMPLETADA && <><SearchSelectMaterial label="¿Hubo acuerdo?" value={acuerdoSeleccionado} options={opcionesEstaticas.acuerdo} onChange={setAcuerdoSeleccionado} readOnly={loading || !puedeGestionarEstados} freeSolo={false} autocompleteProps={{ isOptionEqualToValue: (option, value) => option?.value === value?.value }} /><Button className="botonAmarillo" width={50} disabled={loading || typeof acuerdoSeleccionado?.value !== "boolean" || acuerdoSeleccionado?.value === record.huboAcuerdo} onClick={confirmarAcuerdo}>CONFIRMAR ACUERDO</Button></>}<div>{estadoDestino?.label ? `Cambio pendiente: ${estadoDestino.label}. Confirmalo con el botón correspondiente.` : record.estado === ESTADOS_RELEVAMIENTO.COMPLETADA && record.huboAcuerdo == null ? "Informá si hubo acuerdo para habilitar los estados de destino." : puedeGestionarEstados && destinos.length ? "Seleccioná un nuevo estado para confirmarlo." : "No hay transiciones disponibles para el estado actual."}</div></Grid>}
-    {puedeGestionarAnexos && <Grid className={css.group} col gap="10px"><Grid className={css.titulo}>Observaciones</Grid><InputMaterial label="Observación opcional" multiline rows={3} value={observacion} onChange={setObservacion} /><Button className="botonAmarillo" width={50} disabled={loading || !observacion.trim()} onClick={agregarObservacion}>AGREGA OBSERVACIÓN</Button></Grid>}
+    {puedeGestionarAnexos && <Grid className={css.group} col gap="10px">
+      <Grid className={css.titulo}>Cambio de estado</Grid>
+      <SearchSelectMaterial label="Estado" value={estadoSeleccionado} options={opcionesEstado} onChange={seleccionarEstado} readOnly={loading || !puedeGestionarEstados || (record.estado === ESTADOS_RELEVAMIENTO.COMPLETADA && record.huboAcuerdo == null)} freeSolo={false} autocompleteProps={{ isOptionEqualToValue: (option, value) => String(option?.value) === String(value?.value) }} />
+      {puedeRegistrarAcuerdo && <>
+        <SearchSelectMaterial label="¿Hubo acuerdo?" value={acuerdoSeleccionado} options={opcionesEstaticas.acuerdo} onChange={setAcuerdoSeleccionado} readOnly={loading || !puedeGestionarEstados} freeSolo={false} autocompleteProps={{ isOptionEqualToValue: (option, value) => option?.value === value?.value }} />
+        <Button className="botonAmarillo" width={50} disabled={loading || typeof acuerdoSeleccionado?.value !== "boolean" || acuerdoSeleccionado?.value === record.huboAcuerdo} onClick={confirmarAcuerdo}>CONFIRMAR ACUERDO</Button>
+      </>}
+      {record.estado === ESTADOS_RELEVAMIENTO.AUDIENCIA && <>
+        <Grid className={css.titulo}>Seguimiento de audiencia</Grid>
+        <Grid grid="auto / 1fr 1fr" gap="10px">
+          <DateTimePicker type="date" label="Fecha de audiencia" value={fechaAudiencia} onChange={setFechaAudiencia} format="YYYY-MM-DD" readOnly={loading} />
+          <SearchSelectMaterial label="¿La audiencia se realizó?" value={audienciaRealizadaSeleccionada} options={opcionesEstaticas.acuerdo} onChange={setAudienciaRealizadaSeleccionada} readOnly={loading} freeSolo={false} autocompleteProps={{ isOptionEqualToValue: (option, value) => option?.value === value?.value }} />
+        </Grid>
+        <Button className="botonAmarillo" width={50} disabled={loading || !fechaAudiencia || typeof audienciaRealizadaSeleccionada?.value !== "boolean"} onClick={guardarDatosAudiencia}>GUARDAR AUDIENCIA</Button>
+      </>}
+      <div>{estadoDestino?.label ? `Cambio pendiente: ${estadoDestino.label}. Confirmalo con el botón correspondiente.` : record.estado === ESTADOS_RELEVAMIENTO.COMPLETADA && record.huboAcuerdo == null ? "Informá si hubo acuerdo para habilitar los estados de destino." : puedeGestionarEstados && destinos.length ? "Seleccioná un nuevo estado para confirmarlo." : "No hay transiciones disponibles para el estado actual."}</div>
+    </Grid>}
+    {puedeGestionarAnexos && record.estado !== ESTADOS_RELEVAMIENTO.FINALIZADA && <Grid className={css.group} col gap="10px"><Grid className={css.titulo}>Observaciones</Grid><InputMaterial label="Observación opcional" multiline rows={3} value={observacion} onChange={setObservacion} /><Button className="botonAmarillo" width={50} disabled={loading || !observacion.trim()} onClick={agregarObservacion}>AGREGA OBSERVACIÓN</Button></Grid>}
   </Grid>;
 
-  const documentacionPanel = <Grid full col gap="10px"><Documentacion data={documentacion} tipoDocumentacion={["Otros"]} defaultDocumentTypeId={17} disabled={!puedeGestionarAnexos || loading} allowUpdate={false} allowDelete={false} onChange={cambiarDocumentacion} />{puedeGestionarAnexos && <Button className="botonAmarillo" width={50} disabled={loading || !documentosPendientes.length} onClick={confirmarDocumentacion}>CONFIRMA DOCUMENTACIÓN</Button>}</Grid>;
+  const documentacionPanel = <Grid full col gap="10px"><Documentacion data={documentacion} tipoDocumentacion={tiposDocumentacionRelevamiento} showAvailableDocumentTypes disabled={!puedeGestionarAnexos || loading} allowUpdate={false} allowDelete={false} onChange={cambiarDocumentacion} onDownload={onDownloadDocument} disableDownload={loading} formatDocumentType={tipoDocumentacionConFormato} />{puedeGestionarAnexos && <Button className="botonAmarillo" width={50} disabled={loading || !documentosPendientes.length} onClick={confirmarDocumentacion}>CONFIRMA DOCUMENTACIÓN</Button>}</Grid>;
   const novedadesPanel = <Grid full col gap="10px">
     <Grid grid="auto / 1fr 180px 180px 150px" gap="inherit"><SearchSelectMaterial label="Estado de Relevamiento" value={filtroEstado} options={opcionesFiltro} onChange={setFiltroEstado} inputReadOnly /><DateTimePicker type="date" label="Fecha Desde" value={fechaDesde} onChange={setFechaDesde} format="YYYY-MM-DD" /><DateTimePicker type="date" label="Fecha Hasta" value={fechaHasta} onChange={setFechaHasta} format="YYYY-MM-DD" /><Button className="botonAzul" disabled={!filtroEstado?.value && !fechaDesde && !fechaHasta} onClick={() => { setFiltroEstado({ label: "Todos los estados" }); setFechaDesde(null); setFechaHasta(null); }}>Limpia filtros</Button></Grid>
     <Table keyField="rowKey" data={novedades} mostrarBuscar={false} pagination={{ size: 10 }} noDataIndication="No existen novedades para mostrar" selection={{ mode: "radio", clickToSelect: true, hideSelectColumn: true, selected: novedadSeleccionada ? [novedadSeleccionada.rowKey] : [], onSelect: setNovedadSeleccionada }} columns={[{ dataField: "createdDate", text: "Fecha", formatter: fecha }, { dataField: "estado", text: "Estado", sort: true }, { dataField: "tipo", text: "Tipo" }, { dataField: "observaciones", text: "Observaciones" }, { dataField: "createdBy", text: "Usuario" }]} />

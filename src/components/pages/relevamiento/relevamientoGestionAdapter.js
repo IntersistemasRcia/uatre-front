@@ -55,6 +55,8 @@ export const adaptarGestionRelevamiento = (gestion, trabajadores = null) => {
     estado: gestion?.estado || ESTADOS_RELEVAMIENTO.REGISTRADA,
     version: gestion?.version || "",
     huboAcuerdo: gestion?.huboAcuerdo ?? null,
+    fechaAudiencia: relevamiento.fechaAudiencia ?? null,
+    audienciaSeRealizo: relevamiento.audienciaSeRealizo ?? null,
     fechaFinalizacion: gestion?.fechaFinalizacionUtc || null,
     empleador: {
       razonSocial: relevamiento.establecimientoRazonSocial ?? null,

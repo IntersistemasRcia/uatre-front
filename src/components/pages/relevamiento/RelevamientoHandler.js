@@ -139,6 +139,16 @@ const RelevamientoHandler = () => {
           },
           params: {},
         };
+      case "DescargarDocumento":
+        return {
+          config: {
+            baseURL: "App",
+            endpoint: `/Fiscalizaciones/${params.relevamientoId}/documentos/${params.documentoId}`,
+            method: "GET",
+            okType: "blob",
+          },
+          params: {},
+        };
       case "ActualizarTrabajador":
         return {
           config: { baseURL: "App", endpoint: `/FiscalizacionesTrabajador/${params.id}`, method: "PUT", body: params.body, okType: "response" },
@@ -468,6 +478,38 @@ const RelevamientoHandler = () => {
       : null,
     [gestiones, relevamientoSelected]
   );
+
+  const descargarDocumento = useCallback(async (documento) => {
+    if (!relevamientoSelected?.id || !documento?.documentoId) {
+      setGestionError("No se encontró un documento persistido para descargar.");
+      return;
+    }
+
+    setGestionLoading(true);
+    setGestionError(null);
+    try {
+      const archivo = await requestGestion("DescargarDocumento", {
+        relevamientoId: relevamientoSelected.id,
+        documentoId: documento.documentoId,
+      });
+      if (!(archivo instanceof Blob)) {
+        throw new Error("No se pudo obtener el archivo solicitado.");
+      }
+
+      const url = window.URL.createObjectURL(archivo);
+      const enlace = document.createElement("a");
+      enlace.href = url;
+      enlace.download = documento.nombreArchivo || `documento-${documento.documentoId}`;
+      document.body.appendChild(enlace);
+      enlace.click();
+      enlace.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      setGestionError(error?.message || "No se pudo descargar el documento solicitado.");
+    } finally {
+      setGestionLoading(false);
+    }
+  }, [relevamientoSelected, requestGestion]);
 
   const obtenerGestion = useCallback(async (id, relevamientoAlternativo = null) => {
     let gestion;
@@ -931,6 +973,7 @@ const RelevamientoHandler = () => {
           onSave={guardarGestion}
           onSaveData={guardarDatosPrincipales}
           onSaveWorker={guardarTrabajador}
+          onDownloadDocument={descargarDocumento}
           catalogos={catalogosEdicion}
         />
       )}

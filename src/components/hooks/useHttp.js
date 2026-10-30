@@ -98,7 +98,10 @@ const useHttp = () => {
 					const decodeType = async (type = "") => {
 						switch (type?.toString().trim().toLowerCase()) {
 							case "json":
-								return response.json();
+								{
+									const text = await response.text();
+									return text.trim() ? JSON.parse(text) : null;
+								}
 							case "text":
 								return response.text();
 							case "blob":

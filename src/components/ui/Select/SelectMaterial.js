@@ -31,7 +31,7 @@ const SelectMaterial = (props) => {
 			style={{ width: props.width != null ? `${props.width}%` : "100%" }}
 			error={!!props.error}
 		>
-			<InputLabel id={props.label + "-label"}>{props.label}</InputLabel>
+			<InputLabel id={props.label + "-label"} shrink={props.displayEmpty && (props.value == null || props.value === "") ? true : undefined}>{props.label}</InputLabel>
 			<Select
 				required={props.required ?? false}
 				className={styles.select}
@@ -41,6 +41,8 @@ const SelectMaterial = (props) => {
 				label={props.label}
 				value={props.value}
 				defaultValue={props.defaultValue}
+				displayEmpty={props.displayEmpty ?? false}
+				renderValue={props.renderValue}
 				onChange={handleChange}
 				MenuProps={MenuProps}
 				size="small"
