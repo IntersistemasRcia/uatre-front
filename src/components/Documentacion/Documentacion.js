@@ -14,8 +14,15 @@ const initEditing = {
 const Documentacion = ({
 	data = [],
 	disabled = false,
+	allowUpdate = true,
+	allowDelete = true,
+	defaultDocumentTypeId = null,
 	onChange = ({ index, item }) => {},
 	tipoDocumentacion= [],
+	showAvailableDocumentTypes = false,
+	onDownload = null,
+	disableDownload = false,
+	formatDocumentType = null,
 }) => {
 	const { sendRequest } = useHttp();
 
@@ -48,10 +55,18 @@ const Documentacion = ({
 
 	return (
 		<Grid col full="width" gap="10px">
+			{showAvailableDocumentTypes && <Grid full="width">
+				{tipoList.data.length
+					? `Tipos de documentación disponibles: ${tipoList.data.map((tipo) => tipo.descripcion).join(", ")}.`
+					: "No hay tipos de documentación disponibles para seleccionar."}
+			</Grid>}
 			<Grid full="width" gap="5px">
 				<DocumentacionTable
 					data={data}
 					tipoList={tipoList.data}
+					onDownload={onDownload}
+					disableDownload={disableDownload}
+					formatDocumentType={formatDocumentType}
 					selection={{
 						onSelect: (row, _isSelect, index, _e) =>
 							setEditing({
@@ -68,12 +83,16 @@ const Documentacion = ({
 					<Button
 						className="botonAmarillo"
 						disabled={disabled || editing.req != null}
-						onClick={() => setEditing((old) => ({ ...old, data: {}, req: 1 }))}
+						onClick={() => setEditing((old) => ({
+							...old,
+							data: defaultDocumentTypeId == null ? {} : { refTipoDocumentacionId: defaultDocumentTypeId },
+							req: 1,
+						}))}
 					>
 						Agrega documentación
 					</Button>
 				</Grid>
-				<Grid grow>
+				{allowUpdate && <Grid grow>
 					<Button
 						className="botonAmarillo"
 						disabled={
@@ -86,8 +105,8 @@ const Documentacion = ({
 					>
 						Modifica documentación
 					</Button>
-				</Grid>
-				<Grid grow>
+				</Grid>}
+				{allowDelete && <Grid grow>
 					<Button
 						className="botonAmarillo"
 						disabled={
@@ -100,7 +119,7 @@ const Documentacion = ({
 					>
 						Borra documentación
 					</Button>
-				</Grid>
+				</Grid>}
 			</Grid>
 			<Grid
 				col
@@ -130,13 +149,13 @@ const Documentacion = ({
 							req: null,
 						}))
 					}
-					onConfirm={() => {
+					onConfirm={(changes = {}) => {
 						switch (editing.req) {
 							case 1: // Agrega
-								onChange({ item: editing.data });
+							onChange({ item: { ...editing.data, ...changes } });
 								break;
 							case 2: // Modifica
-								onChange({ index: editing.index, item: editing.data });
+							onChange({ index: editing.index, item: { ...editing.data, ...changes } });
 								break;
 							case 3: // Borra
 								onChange({ index: editing.index });

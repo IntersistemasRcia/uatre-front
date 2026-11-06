@@ -17,21 +17,59 @@ const DocumentacionForm = ({
 }) => {
 
 	const archivoRef = useRef(null);
+	const [archivoCargando, setArchivoCargando] = React.useState(false);
+	const [archivoProcesado, setArchivoProcesado] = React.useState(null);
 	const [errors, setErrors] = React.useState({
 		refTipoDocumentacionId: false,
 		archivo: false,
 	});
 
-	const getValue = (v) => record[v] ?? "";
+	React.useEffect(() => {
+		setArchivoProcesado(null);
+	}, [request]);
+
+	const getValue = (v) => archivoProcesado?.[v] ?? record[v] ?? "";
+	const getArchivoProcesado = () => {
+		const archivo = getValue("archivo");
+		const nombreArchivo = getValue("nombreArchivo");
+		return archivo && nombreArchivo ? { archivo, nombreArchivo, contentType: getValue("contentType") } : null;
+	};
 
 	const tipoListData = tipoList.map((r) => ({
 		value: r.id,
 		label: r.descripcion,
 	}));
 
-	const confirmaHandle = () => {
+	const procesarArchivo = (archivo, confirmarAlFinalizar = false) => {
+		const reader = new FileReader();
+		setArchivoCargando(true);
+		reader.readAsDataURL(archivo);
+		reader.onload = () => {
+			const contenido = String(reader.result || "").replace(/^data:[^;]+;base64,/, "");
+			if (!contenido) {
+				setErrors((o) => ({ ...o, archivo: true }));
+				setArchivoCargando(false);
+				return;
+			}
 
-		console.log("errors",errors)
+			const cambios = {
+				archivo: contenido,
+				nombreArchivo: archivo.name,
+				contentType: archivo.type,
+			};
+			setArchivoProcesado(cambios);
+			setErrors((o) => ({ ...o, archivo: false }));
+			onChange(cambios);
+			setArchivoCargando(false);
+			if (confirmarAlFinalizar) onConfirm(cambios);
+		};
+		reader.onerror = () => {
+			setErrors((o) => ({ ...o, archivo: true }));
+			setArchivoCargando(false);
+		};
+	};
+
+	const confirmaHandle = () => {
 		if (getValue("refTipoDocumentacionId") === "") {
 			setErrors((o) => ({
 				...o,
@@ -40,15 +78,20 @@ const DocumentacionForm = ({
 			return;
 		}
 
-		console.log("archivoRef",archivoRef)
-		if (archivoRef.current?.files.length === 0 && request == 1) {
-			setErrors((o) => ({
-				...o,
-				archivo: true,
-			}));
+		const archivoProcesadoActual = getArchivoProcesado();
+		if (request === 1 && !archivoProcesadoActual) {
+			const archivoSeleccionado = archivoRef.current?.files?.[0];
+			if (!archivoSeleccionado) {
+				setErrors((o) => ({
+					...o,
+					archivo: true,
+				}));
+				return;
+			}
+			if (!archivoCargando) procesarArchivo(archivoSeleccionado, true);
 			return;
 		}
-		onConfirm()
+		onConfirm(archivoProcesadoActual ?? {})
 	}
 
 	return (
@@ -62,6 +105,10 @@ const DocumentacionForm = ({
 						options={tipoListData}
 						value={getValue("refTipoDocumentacionId")}
 						defaultValue={tipoListData[0]}
+						displayEmpty
+						renderValue={(value) => value === "" || value == null
+							? "Seleccioná un tipo de documentación"
+							: tipoListData.find((tipo) => String(tipo.value) === String(value))?.label || "Seleccioná un tipo de documentación"}
 						onChange={(v) =>
 							(setErrors((o) => ({
 								...o,
@@ -74,7 +121,7 @@ const DocumentacionForm = ({
 						helperText={errors?.refTipoDocumentacionId ? "Dato Requerido" : ""}
 					/>
 				</Grid>
-				<Grid grow><a download={getValue("nombreArchivo")} href={`data:image/*;base64,${getValue("archivo")}`}>{getValue("nombreArchivo")}</a></Grid>
+				<Grid grow>{getArchivoProcesado()?.nombreArchivo && <a download={getArchivoProcesado().nombreArchivo} href={`data:image/*;base64,${getArchivoProcesado().archivo}`}>{getArchivoProcesado().nombreArchivo}</a>}</Grid>
 				<Grid width="150px">
 					<input
 						ref={archivoRef}
@@ -88,15 +135,7 @@ const DocumentacionForm = ({
 							}));
 							if (e.target.files.length === 0) return;
 							const archivo = e.target.files[0];
-							const reader = new FileReader();
-							reader.readAsDataURL(archivo);
-							reader.onload = () => {
-								onChange({
-									archivo: reader.result?.split("base64,")[1],
-									nombreArchivo: archivo.name,
-									contentType: archivo.type,
-								});
-							};
+							procesarArchivo(archivo);
 						}}
 						onClick={(e) => {
 							e.target.value = null;
@@ -106,9 +145,9 @@ const DocumentacionForm = ({
 					<Button
 						className="botonAmarillo"
 						onClick={() => archivoRef.current?.click()}
-						disabled={disabled}
+						disabled={disabled || archivoCargando}
 					>
-						Subir archivo
+						{archivoCargando ? "Procesando archivo..." : "Subir archivo"}
 					</Button>
 					
 				</Grid>
@@ -134,7 +173,7 @@ const DocumentacionForm = ({
 			</Grid>
 			<Grid full="width" justify="center" gap="50px">
 				<Grid>
-					<Button className="botonAmarillo" onClick={() => confirmaHandle()} disabled={disabled}>
+					<Button className="botonAmarillo" onClick={() => confirmaHandle()} disabled={disabled || archivoCargando}>
 						{(() => {
 							switch (request) {
 								case 1:
