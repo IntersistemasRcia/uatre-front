@@ -89,8 +89,8 @@ const RelevamientoHandler = () => {
 
   const tarea = useTareasUsuario();
   const disableTabAutoridades = !tarea.hasTarea("Datos_SeccionalAutoridades");
-  const puedeConsultar = tarea.hasTarea("Relevamiento_Consulta", "Administrador Relevamiento") || tarea.hasTarea("Relevamiento_Modifica", "Administrador Relevamiento") || tarea.hasTarea("Relevamiento_Tabla", "Administrador Relevamiento");
-  const puedeModificar = tarea.hasTarea("Relevamiento_Modifica", "Administrador Relevamiento") || tarea.hasTarea("Relevamiento_Tabla", "Administrador Relevamiento");
+  const puedeConsultar = tarea.hasTarea("Relevamiento_Consulta", "Administrador Relevamiento") || tarea.hasTarea("Relevamiento_Modifica", "Administrador Relevamiento");
+  const puedeModificar = tarea.hasTarea("Relevamiento_Modifica", "Administrador Relevamiento");
   const [modalMode, setModalMode] = useState(null);
   const [gestiones, setGestiones] = useState({});
   const [gestionLoading, setGestionLoading] = useState(false);
