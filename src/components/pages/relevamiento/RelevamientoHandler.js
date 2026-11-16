@@ -32,7 +32,7 @@ const camposRelevamientoEditables = [
 ];
 const camposTrabajadorEditables = [
   "cuil", "dni", "apellido", "nombre", "inicioActividad", "actividad", "sexo", "contacto", "celular", "email",
-  "registrado", "equipamiento", "bienCategorizado", "jornadaHorarioId", "observacionesCondicionLaboral", "estadoVivienda",
+  "registrado", "equipamiento", "bienCategorizado", "observacionesCondicionLaboral", "estadoVivienda",
   "viveEnElLugar", "cantidadIntegrantesVivienda", "areaDescansoEquipada", "serviciosElectricidad", "serviciosGas",
   "serviciosAguaPotable", "serviciosInternet", "hijos", "pareja", "parejaTrabaja", "parejaTrabajaIr", "hijosMayores",
   "hijosMayoresTrabajan", "hijosMayoresTrabajanIr", "hijosMenoresEscolarizados", "jornadaHorarioDescripcion",
@@ -40,7 +40,7 @@ const camposTrabajadorEditables = [
 ];
 const seleccionarCampos = (origen, campos) => Object.fromEntries(campos.filter((campo) => Object.prototype.hasOwnProperty.call(origen || {}, campo)).map((campo) => [campo, origen[campo]]));
 const entero = (valor) => Number(String(valor ?? "").replace(/\D/g, "")) || 0;
-const camposTrabajadorNumericos = new Set(["cuil", "dni", "celular", "jornadaHorarioId", "cantidadIntegrantesVivienda"]);
+const camposTrabajadorNumericos = new Set(["cuil", "dni", "celular", "cantidadIntegrantesVivienda"]);
 const normalizarTrabajador = (trabajador) => Object.fromEntries(
   Object.entries(seleccionarCampos(trabajador, camposTrabajadorEditables)).map(([campo, valor]) => [
     campo,
@@ -99,7 +99,6 @@ const RelevamientoHandler = () => {
     loading: true,
     seccionales: [],
     localidades: [],
-    jornadas: [],
     errores: [],
   });
   const idempotencyKeysRef = React.useRef(new Map());
@@ -164,11 +163,6 @@ const RelevamientoHandler = () => {
           },
           params: {},
         };
-      case "GetJornadas":
-        return {
-          config: { baseURL: "App", endpoint: "/JornadaHorario", method: "GET" },
-          params: { deleted: false, page: "1,1000" },
-        };
       case "GetLocalidadesCatalogo":
         return {
           config: { baseURL: "Afiliaciones", endpoint: "/RefLocalidad", method: "GET" },
@@ -215,15 +209,13 @@ const RelevamientoHandler = () => {
     };
 
     Promise.allSettled([
-      requestGestion("GetJornadas"),
       requestGestion("GetLocalidadesCatalogo"),
       cargarSeccionalesCatalogo(),
-    ]).then(([jornadas, localidades, seccionales]) => {
+    ]).then(([localidades, seccionales]) => {
       if (!activo) return;
-      const resultados = [jornadas, localidades, seccionales];
+      const resultados = [localidades, seccionales];
       setCatalogosEdicion({
         loading: false,
-        jornadas: jornadas.status === "fulfilled" ? datosCatalogo(jornadas.value) : [],
         localidades: localidades.status === "fulfilled" ? datosCatalogo(localidades.value) : [],
         seccionales: seccionales.status === "fulfilled" ? datosCatalogo(seccionales.value) : [],
         errores: resultados.filter((resultado) => resultado.status === "rejected").map((resultado) => resultado.reason?.message || "No se pudo cargar un catálogo."),
@@ -590,6 +582,10 @@ const RelevamientoHandler = () => {
 
   const guardarDatosPrincipales = useCallback(async (editado) => {
     if (!relevamientoSelected) throw new Error("Seleccioná un relevamiento.");
+    const gestionActual = await obtenerGestion(relevamientoSelected.id, relevamientoSelected);
+    if (!gestionActual.version) {
+      throw new Error("No se pudo obtener una versión vigente del relevamiento. Recargá los datos e intentá nuevamente.");
+    }
     const establecimiento = editado.establecimiento || {};
     return operarGestion("ACTUALIZAR_DATOS_PRINCIPALES", {
       datosPrincipales: {
@@ -627,8 +623,8 @@ const RelevamientoHandler = () => {
           establecimientoServiciosAguaPotableTipo: establecimiento.serviciosAguaPotableTipo || null,
           establecimientoServiciosInternet: establecimiento.serviciosInternet || null,
       },
-    }, editado.version);
-  }, [operarGestion, relevamientoSelected]);
+    }, gestionActual.version);
+  }, [obtenerGestion, operarGestion, relevamientoSelected]);
 
   const guardarTrabajador = useCallback(async (trabajador) => {
     if (!relevamientoSelected || !trabajador?.id) throw new Error("No se encontró el trabajador a actualizar.");
