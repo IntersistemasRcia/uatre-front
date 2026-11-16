@@ -147,7 +147,7 @@ const trabajadorContacto = [
 ];
 
 const trabajadorLaboral = [
-  { key: "registrado", label: "Registrado", catalogo: "siNo" }, { key: "bienCategorizado", label: "Categorizado", catalogo: "categorizacion" }, { key: "equipamiento", label: "Equipamiento", catalogo: "siNo" }, { key: "indumentariaTrab", label: "Indumentaria", catalogo: "siNo" }, { key: "jornadaHorarioId", label: "Jornada/Horario", catalogo: "jornadas", descripcionCampo: "jornadaHorarioDescripcion" }, { key: "observacionesCondicionLaboral", label: "Observaciones", multiline: true },
+  { key: "registrado", label: "Registrado", catalogo: "siNo" }, { key: "bienCategorizado", label: "Categorizado", catalogo: "categorizacion" }, { key: "equipamiento", label: "Equipamiento", catalogo: "siNo" }, { key: "indumentariaTrab", label: "Indumentaria", catalogo: "siNo" }, { key: "jornadaHorarioDescripcion", label: "Jornada/Horario" }, { key: "observacionesCondicionLaboral", label: "Observaciones", multiline: true },
 ];
 
 const trabajadorHabitacional = [
@@ -415,7 +415,7 @@ const RelevamientoForm = ({ record, mode, canModify, loading, externalError, onC
           {bloque("6. Condición Laboral del Trabajador · Situación Laboral", trabajadorLaboral, actual, cambiar)}
           {bloque("7. Condición Habitacional · Situación Habitacional", trabajadorHabitacional, actual, cambiar)}
           {esSi(actual.viveEnElLugar) && bloque("Servicios de la Vivienda", trabajadorServicios, actual, cambiar)}
-          {esSi(actual.viveEnElLugar) && bloque("Pareja", trabajadorPareja, actual, cambiar)}
+          {esSi(actual.viveEnElLugar) && bloque("Pareja", esSi(actual.pareja) ? trabajadorPareja : trabajadorPareja.slice(0, 1), actual, cambiar)}
           {esSi(actual.viveEnElLugar) && bloque("Hijos", trabajadorHijos, actual, cambiar)}
           {bloque("Observaciones", trabajadorObservacionesHabitacionales, actual, cambiar)}
           {editable && <Button className="botonAmarillo" marginTop={3} disabled={loading} onClick={() => guardarTrabajador(trabajador)}>GUARDAR TRABAJADOR</Button>}

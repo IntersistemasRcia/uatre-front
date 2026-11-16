@@ -7,6 +7,28 @@ import styles from "./EstablecimientoDetails.module.css";
 /** @type {IM} */
 const InputMaterial = (p) => <IM variant="standard" size="small" {...p} />;
 
+const valorAccesibilidad = (data) => {
+	const establecimiento = data.establecimiento ?? {};
+	const valor = [
+		data.establecimientoAccesibilidad,
+		data.accesibilidad,
+		establecimiento.accesibilidad,
+	].find((item) => item != null && item !== "");
+
+	switch (String(valor ?? "").trim().toUpperCase()) {
+		case "S":
+		case "SI":
+		case "TRUE":
+			return "SI";
+		case "N":
+		case "NO":
+		case "FALSE":
+			return "NO";
+		default:
+			return "Sin dato";
+	}
+};
+
 const EstablecimientoDetails = (props) => {
 
 	console.log("config",props.config)
@@ -60,7 +82,7 @@ const EstablecimientoDetails = (props) => {
 											? `SI - ${data.establecimientoBanosUbicacion === "A" ? "Afuera" : data.establecimientoBanosUbicacion === "D" ? "Adentro" : ""}` 
 											: "NO"
 									)}/>
-									<InputMaterial label="Accesibilidad"  value={validar(data.establecimientoAreaDescansoEquipada === "S" ? "SI" : "NO")}/>
+									<InputMaterial label="Accesibilidad" value={valorAccesibilidad(data)}/>
 									<InputMaterial label="Electricidad"  value={validar(
 										data.establecimientoServiciosElectricidad === "S" 
 											? `SI - ${data.establecimientoServiciosElectricidadTipo === "S" ? "Genset" : data.establecimientoServiciosElectricidadTipo === "N" ? "De red" : ""}` 

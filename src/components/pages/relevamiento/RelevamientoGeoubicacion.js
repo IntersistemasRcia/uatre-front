@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Autocomplete, useLoadScript } from "@react-google-maps/api";
 import InputMaterial from "components/ui/Input/InputMaterial";
+import "./RelevamientoGeoubicacion.css";
 
 const libraries = ["places"];
 
@@ -17,7 +18,7 @@ const coordenadasDesdeValor = (valor) => {
   return { latitud, longitud };
 };
 
-const coordenadasComoValor = ({ lat, lng }) => `${lat},${lng}`;
+const coordenadasComoValor = ({ lat, lng }) => `${lat}|${lng}`;
 
 const RelevamientoGeoubicacion = ({ value, onChange, readOnly, disabled }) => {
   const [direccion, setDireccion] = useState("");
@@ -120,7 +121,6 @@ const RelevamientoGeoubicacion = ({ value, onChange, readOnly, disabled }) => {
       }}
     />
   );
-
   if (readOnly || !isLoaded || loadError || !googleMapsApiKey) return input;
 
   return (
