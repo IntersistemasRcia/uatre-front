@@ -73,7 +73,7 @@ const opcionesEstaticas = {
   estadoVivienda: [opcion("B", "Buena"), opcion("M", "Mala"), opcion("A", "Aceptable")],
   banosUbicacion: [opcion("D", "Dentro"), opcion("A", "Afuera")],
   tipoElectricidad: [opcion("S", "Genset", ["Genset"]), opcion("N", "De red", ["De red"])],
-  tipoGas: [opcion("Garrafa", "Garrafa"), opcion("De red", "De red")],
+  tipoGas: [opcion("X", "Garrafa", ["Garrafa"]), opcion("R", "De red", ["De red", "N"])],
   categorizacion: [opcion("B", "Bien categorizado"), opcion("M", "Mal categorizado")],
   acuerdo: [opcion(true, "Sí"), opcion(false, "No")],
 };
@@ -193,7 +193,20 @@ const RelevamientoForm = ({ record, mode, canModify, loading, externalError, onC
   const puedeGestionarAnexos = mode === "M" && canModify;
   const puedeMostrarEstado = Boolean(record.estado);
   const estadoParaCampos = estadoDestino?.value || record.estado;
+  const historialEstados = useMemo(() => [...(record.historial || [])].sort((primero, segundo) => new Date(primero.fecha || 0) - new Date(segundo.fecha || 0)), [record.historial]);
+  const estadosRecorridos = useMemo(() => new Set([record.estado, ...historialEstados.flatMap((item) => [item.estadoAnterior, item.estadoNuevo])].filter(Boolean)), [historialEstados, record.estado]);
+  const mostrarAcuerdo = estadoParaCampos !== ESTADOS_RELEVAMIENTO.REGISTRADA && (
+    [ESTADOS_RELEVAMIENTO.COMPLETADA, ESTADOS_RELEVAMIENTO.INCOMPLETA].includes(estadoParaCampos)
+      || estadosRecorridos.has(ESTADOS_RELEVAMIENTO.COMPLETADA)
+      || estadosRecorridos.has(ESTADOS_RELEVAMIENTO.INCOMPLETA)
+      || record.huboAcuerdo != null
+  );
+  const mostrarAudiencia = estadoParaCampos === ESTADOS_RELEVAMIENTO.AUDIENCIA
+    || estadosRecorridos.has(ESTADOS_RELEVAMIENTO.AUDIENCIA)
+    || Boolean(record.fechaAudiencia)
+    || record.audienciaSeRealizo != null;
   const puedeRegistrarAcuerdo = [ESTADOS_RELEVAMIENTO.COMPLETADA, ESTADOS_RELEVAMIENTO.INCOMPLETA].includes(estadoParaCampos);
+  const puedeEditarAudiencia = puedeGestionarEstados && estadoParaCampos === ESTADOS_RELEVAMIENTO.AUDIENCIA;
   // Permite que, al informar el acuerdo, se habilite en el mismo guardado el
   // destino de estado que corresponda a la decisión seleccionada.
   const huboAcuerdoParaDestino = record.estado === ESTADOS_RELEVAMIENTO.COMPLETADA
@@ -266,6 +279,7 @@ const RelevamientoForm = ({ record, mode, canModify, loading, externalError, onC
     const guardaDatosPrincipales = editable;
     const cambioAcuerdo = puedeRegistrarAcuerdo && typeof acuerdoSeleccionado?.value === "boolean" && acuerdoSeleccionado.value !== record.huboAcuerdo;
     const audienciaInformada = Boolean(fechaAudiencia) || typeof audienciaRealizadaSeleccionada?.value === "boolean";
+    const observacionNueva = observacion.trim();
     const audienciaEditada = estadoSeleccionado === ESTADOS_RELEVAMIENTO.AUDIENCIA
       && audienciaInformada
       && (fechaAudiencia !== (fechaInput(record.fechaAudiencia) || null) || audienciaRealizadaSeleccionada?.value !== record.audienciaSeRealizo);
@@ -274,7 +288,7 @@ const RelevamientoForm = ({ record, mode, canModify, loading, externalError, onC
       setError("Para guardar los datos de audiencia indicá la fecha y si la audiencia se realizó.");
       return;
     }
-    if (!guardaDatosPrincipales && !estadoDestino?.value && !cambioAcuerdo && !audienciaEditada) {
+    if (!guardaDatosPrincipales && !estadoDestino?.value && !cambioAcuerdo && !audienciaEditada && !observacionNueva) {
       setError("No hay cambios para guardar.");
       return;
     }
@@ -285,15 +299,18 @@ const RelevamientoForm = ({ record, mode, canModify, loading, externalError, onC
         huboAcuerdo: cambioAcuerdo ? acuerdoSeleccionado.value : null,
         fechaAudiencia: audienciaEditada ? fechaAudiencia : null,
         audienciaSeRealizo: audienciaEditada ? audienciaRealizadaSeleccionada.value : null,
+        observaciones: observacionNueva ? [observacionNueva] : null,
       }),
       "Los cambios se guardaron correctamente."
     );
-    if (actualizado) setEstadoDestino(null);
+    if (actualizado) {
+      setEstadoDestino(null);
+      setObservacion("");
+    }
   };
   const seleccionarEstado = (seleccion) => setEstadoDestino(
     seleccion?.value && seleccion.value !== estadoActualOpcion.value ? seleccion : null
   );
-  const agregarObservacion = () => ejecutar(() => onOperation("AGREGAR_OBSERVACION", { observaciones: [observacion.trim()] }), "La observación se registró correctamente.").then((actualizado) => { if (actualizado) setObservacion(""); });
   const cambiarDocumentacion = ({ index, item }) => {
     if (index != null) {
       setError("La documentación de Relevamientos es trazable y no puede modificarse ni eliminarse.");
@@ -387,7 +404,11 @@ const RelevamientoForm = ({ record, mode, canModify, loading, externalError, onC
     if (fechaDesde && (!value || value < new Date(fechaDesde))) return false;
     if (fechaHasta && (!value || value > new Date(`${fechaHasta}T23:59:59`))) return false;
     return true;
-  }).map((item) => ({ ...item, rowKey: item.id, estado: item.estado || record.estado, observaciones: item.detalle || "", createdDate: item.fecha, createdBy: item.usuario || "" })), [record.novedades, record.estado, filtroEstado, fechaDesde, fechaHasta]);
+  }).map((item) => ({ ...item, rowKey: item.id, estado: item.estado || record.estado, tipoVisible: item.tipo === "Documento" ? item.tipoDocumental || item.tipo : item.tipo, observaciones: item.detalle || "", createdDate: item.fecha, createdBy: item.usuario || "" })).sort((first, second) => {
+    const fechaSecond = Date.parse(second.createdDate || "");
+    const fechaFirst = Date.parse(first.createdDate || "");
+    return (Number.isFinite(fechaSecond) ? fechaSecond : Number.NEGATIVE_INFINITY) - (Number.isFinite(fechaFirst) ? fechaFirst : Number.NEGATIVE_INFINITY) || String(second.rowKey || "").localeCompare(String(first.rowKey || ""));
+  }), [record.novedades, record.estado, filtroEstado, fechaDesde, fechaHasta]);
 
   const formularioPanel = <Grid full col gap="10px">
     {seccion("acta", "1. Identificación de Acta · Datos del Acta", bloque(null, datosActa, edit, (campoEditado, valor) => actualizar(null, campoEditado, valor)))}
@@ -426,25 +447,24 @@ const RelevamientoForm = ({ record, mode, canModify, loading, externalError, onC
         </Grid></Accordion.Body></Accordion.Item></Accordion>;
       })}
     </>)}
-    {puedeMostrarEstado && <Grid className={css.group} col gap="10px">
-      <Grid className={css.titulo}>Cambio de estado</Grid>
+    {puedeMostrarEstado && <Grid className={css.group} col gap="10px" style={{ padding: "14px 10px 10px" }}>
       <Grid grid="auto / repeat(4, minmax(0, 1fr))" gap="10px">
         <SearchSelectMaterial label="Estado" value={estadoSeleccionado} options={opcionesEstado} onChange={seleccionarEstado} readOnly={loading || !puedeGestionarEstados} freeSolo={false} autocompleteProps={{ isOptionEqualToValue: (option, value) => String(option?.value) === String(value?.value) }} />
-        {puedeRegistrarAcuerdo && <SearchSelectMaterial label="¿Hubo acuerdo?" value={acuerdoSeleccionado} options={opcionesEstaticas.acuerdo} onChange={setAcuerdoSeleccionado} readOnly={loading || !puedeGestionarEstados} freeSolo={false} autocompleteProps={{ isOptionEqualToValue: (option, value) => option?.value === value?.value }} />}
-        {(estadoDestino?.value || record.estado) === ESTADOS_RELEVAMIENTO.AUDIENCIA && <>
-          <DateTimePicker type="date" label="Fecha de audiencia" value={fechaAudiencia} onChange={setFechaAudiencia} format="YYYY-MM-DD" readOnly={loading || !puedeGestionarEstados} />
-          <SearchSelectMaterial label="¿La audiencia se realizó?" value={audienciaRealizadaSeleccionada} options={opcionesEstaticas.acuerdo} onChange={setAudienciaRealizadaSeleccionada} readOnly={loading || !puedeGestionarEstados} freeSolo={false} autocompleteProps={{ isOptionEqualToValue: (option, value) => option?.value === value?.value }} />
+        {mostrarAcuerdo && <SearchSelectMaterial label="¿Hubo acuerdo?" value={acuerdoSeleccionado} options={opcionesEstaticas.acuerdo} onChange={setAcuerdoSeleccionado} readOnly={loading || !puedeGestionarEstados || !puedeRegistrarAcuerdo} freeSolo={false} autocompleteProps={{ isOptionEqualToValue: (option, value) => option?.value === value?.value }} />}
+        {mostrarAudiencia && <>
+          <DateTimePicker type="date" label="Fecha de audiencia" value={fechaAudiencia} onChange={setFechaAudiencia} format="YYYY-MM-DD" readOnly={loading || !puedeEditarAudiencia} />
+          <SearchSelectMaterial label="¿La audiencia se realizó?" value={audienciaRealizadaSeleccionada} options={opcionesEstaticas.acuerdo} onChange={setAudienciaRealizadaSeleccionada} readOnly={loading || !puedeEditarAudiencia} freeSolo={false} autocompleteProps={{ isOptionEqualToValue: (option, value) => option?.value === value?.value }} />
         </>}
       </Grid>
       <div>{mode !== "M" ? "Estado actual en modo consulta." : estadoDestino?.label ? `Cambio pendiente: ${estadoDestino.label}. Se guardará junto con los demás cambios.` : record.estado === ESTADOS_RELEVAMIENTO.COMPLETADA && record.huboAcuerdo == null ? "Informá si hubo acuerdo para habilitar los estados de destino." : puedeGestionarEstados && destinos.length ? "Seleccioná un nuevo estado si corresponde." : "No hay transiciones disponibles para el estado actual."}</div>
     </Grid>}
-    {puedeGestionarAnexos && record.estado !== ESTADOS_RELEVAMIENTO.FINALIZADA && <Grid className={css.group} col gap="10px"><Grid className={css.titulo}>Observaciones</Grid><InputMaterial label="Observación opcional" multiline rows={3} value={observacion} onChange={setObservacion} /><Button className="botonAmarillo" width={50} disabled={loading || !observacion.trim()} onClick={agregarObservacion}>AGREGA OBSERVACIÓN</Button></Grid>}
+    {puedeGestionarAnexos && record.estado !== ESTADOS_RELEVAMIENTO.FINALIZADA && <Grid className={css.group} col gap="10px"><Grid className={css.titulo}>Observaciones</Grid><InputMaterial label="Observación opcional" multiline rows={3} value={observacion} onChange={setObservacion} /></Grid>}
   </Grid>;
 
   const documentacionPanel = <Grid full col gap="10px"><Documentacion data={documentacion} tipoDocumentacion={tiposDocumentacionRelevamiento} showAvailableDocumentTypes disabled={!puedeGestionarAnexos || loading} allowUpdate={false} allowDelete={false} onChange={cambiarDocumentacion} onDownload={onDownloadDocument} disableDownload={loading} formatDocumentType={tipoDocumentacionConFormato} />{puedeGestionarAnexos && <Button className="botonAmarillo" width={50} disabled={loading || !documentosPendientes.length} onClick={confirmarDocumentacion}>CONFIRMA DOCUMENTACIÓN</Button>}</Grid>;
   const novedadesPanel = <Grid full col gap="10px">
     <Grid grid="auto / 1fr 180px 180px 150px" gap="inherit"><SearchSelectMaterial label="Estado de Relevamiento" value={filtroEstado} options={opcionesFiltro} onChange={setFiltroEstado} inputReadOnly /><DateTimePicker type="date" label="Fecha Desde" value={fechaDesde} onChange={setFechaDesde} format="YYYY-MM-DD" /><DateTimePicker type="date" label="Fecha Hasta" value={fechaHasta} onChange={setFechaHasta} format="YYYY-MM-DD" /><Button className="botonAzul" disabled={!filtroEstado?.value && !fechaDesde && !fechaHasta} onClick={() => { setFiltroEstado({ label: "Todos los estados" }); setFechaDesde(null); setFechaHasta(null); }}>Limpia filtros</Button></Grid>
-    <Table keyField="rowKey" data={novedades} mostrarBuscar={false} pagination={{ size: 10 }} noDataIndication="No existen novedades para mostrar" selection={{ mode: "radio", clickToSelect: true, hideSelectColumn: true, selected: novedadSeleccionada ? [novedadSeleccionada.rowKey] : [], onSelect: setNovedadSeleccionada }} columns={[{ dataField: "createdDate", text: "Fecha", formatter: fecha }, { dataField: "estado", text: "Estado", sort: true }, { dataField: "tipo", text: "Tipo" }, { dataField: "observaciones", text: "Observaciones" }, { dataField: "createdBy", text: "Usuario" }]} />
+    <Table keyField="rowKey" data={novedades} mostrarBuscar={false} pagination={{ size: 10 }} noDataIndication="No existen novedades para mostrar" selection={{ mode: "radio", clickToSelect: true, hideSelectColumn: true, selected: novedadSeleccionada ? [novedadSeleccionada.rowKey] : [], onSelect: setNovedadSeleccionada }} columns={[{ dataField: "createdDate", text: "Fecha", formatter: fecha }, { dataField: "estado", text: "Estado", sort: true }, { dataField: "tipoVisible", text: "Tipo" }, { dataField: "observaciones", text: "Observaciones" }, { dataField: "createdBy", text: "Usuario" }]} />
   </Grid>;
   const estadoActual = record.estado || ESTADOS_RELEVAMIENTO.REGISTRADA;
   const encabezado = `${mode === "M" ? "Edita" : "Consulta"} Relevamiento Nro: ${record.actaMinisterio || record.id} · ${estadoActual}`;

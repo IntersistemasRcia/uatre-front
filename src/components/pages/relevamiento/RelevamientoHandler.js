@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useDispatch } from "react-redux";
 import { handleModuloSeleccionar } from "redux/actions";
 import { Tabs, Tab } from "@mui/material";
@@ -19,6 +19,7 @@ import useQueryQueue from "components/hooks/useQueryQueue";
 import Action from "components/helpers/Action";
 import PDFViewer from "./PDFViewer";
 import RelevamientoForm from "./RelevamientoForm";
+import AuthContext from "store/authContext";
 import {
   adaptarGestionRelevamiento,
   crearIdempotencyKey,
@@ -84,8 +85,23 @@ const detalleToPdfRows = (relevamiento = {}, trabajadores = []) => {
 /* =============== Componente =============== */
 const RelevamientoHandler = () => {
   const dispatch = useDispatch();
+  const { usuario } = useContext(AuthContext);
   const tabs = [];
   const [tab, setTab] = useState(0);
+  const tieneAmbitoTodos = usuario?.ambitoTodos != null;
+
+  const ambitoDelegacionesIds = useMemo(
+    () => (tieneAmbitoTodos || !Array.isArray(usuario?.ambitoDelegaciones?.ids) ? [] : usuario.ambitoDelegaciones.ids.map(Number).filter(Boolean)),
+    [tieneAmbitoTodos, usuario]
+  );
+  const ambitoSeccionalesIds = useMemo(
+    () => (tieneAmbitoTodos || !Array.isArray(usuario?.ambitoSeccionales?.ids) ? [] : usuario.ambitoSeccionales.ids.map(Number).filter(Boolean)),
+    [tieneAmbitoTodos, usuario]
+  );
+  const delegacionFijaId = ambitoDelegacionesIds.length === 1 ? ambitoDelegacionesIds[0] : null;
+  const seccionalFijaId = ambitoSeccionalesIds.length === 1 ? ambitoSeccionalesIds[0] : null;
+  const delegacionBloqueada = Boolean(delegacionFijaId || seccionalFijaId);
+  const seccionalBloqueada = Boolean(seccionalFijaId);
 
   const tarea = useTareasUsuario();
   const disableTabAutoridades = !tarea.hasTarea("Datos_SeccionalAutoridades");
@@ -330,6 +346,9 @@ const RelevamientoHandler = () => {
       onLoad: ({ ok, error }) => {
         let data = [];
         if (Array.isArray(ok)) data = ok;
+        if (ambitoDelegacionesIds.length) {
+          data = data.filter((delegacion) => ambitoDelegacionesIds.includes(Number(delegacion.id)));
+        }
 
         setDelegacionSelect((old) => {
           if (old.data.length > 0) return old; // ya cargado, no resetear
@@ -339,14 +358,19 @@ const RelevamientoHandler = () => {
             data,
             error: error?.toString(),
           };
-          n.optionsSrc = delegacionesSelectOptions(n);
-          n.selectedDef = n.optionsSrc.length === 1 ? n.optionsSrc[0] : delegacionSelectDef;
+          n.optionsSrc = delegacionesSelectOptions({
+            ...n,
+            ...(delegacionBloqueada ? { start: [] } : {}),
+          });
+          n.selectedDef = delegacionFijaId
+            ? n.optionsSrc.find((option) => Number(option.value) === delegacionFijaId) || delegacionSelectDef
+            : n.optionsSrc.length === 1 ? n.optionsSrc[0] : delegacionSelectDef;
           n.selected = n.selectedDef;
           return n;
         });
       },
     }));
-  }, [delegacionSelect.reload, setDelegacionesQuery]);
+  }, [ambitoDelegacionesIds, delegacionBloqueada, delegacionFijaId, delegacionSelect.reload, setDelegacionesQuery]);
 
   // Carga de Seccionales (depende de la delegación)
   useEffect(() => {
@@ -364,7 +388,8 @@ const RelevamientoHandler = () => {
     };
 
     const data = [];
-    if (!seccionalSelect.refDelegacionId) {
+    const resolverDelegacionDeSeccional = seccionalFijaId && !seccionalSelect.refDelegacionId;
+    if (!seccionalSelect.refDelegacionId && !resolverDelegacionDeSeccional) {
       changes.loading = null;
       changes.data = data;
       setSeccionalSelect((o) => ({ ...o, ...changes }));
@@ -401,11 +426,27 @@ const RelevamientoHandler = () => {
         }));
       } else {
         changes.loading = null;
-        changes.data = data;
-        changes.optionsSrc = seccionalesSelectOptions(changes);
-        changes.selectedDef =
-          changes.optionsSrc.length === 1 ? changes.optionsSrc[0] : seccionalSelectDef;
+        const seccionalesAmbito = ambitoSeccionalesIds.length
+          ? data.filter((seccional) => ambitoSeccionalesIds.includes(Number(seccional.id)))
+          : data;
+        changes.data = seccionalesAmbito;
+        changes.optionsSrc = seccionalesSelectOptions({
+          ...changes,
+          data: seccionalesAmbito,
+          ...(seccionalBloqueada ? { start: [] } : {}),
+        });
+        changes.selectedDef = seccionalFijaId
+          ? changes.optionsSrc.find((option) => Number(option.value) === seccionalFijaId) || seccionalSelectDef
+          : changes.optionsSrc.length === 1 ? changes.optionsSrc[0] : seccionalSelectDef;
         changes.selected = changes.selectedDef;
+
+        if (resolverDelegacionDeSeccional && changes.selectedDef?.record?.refDelegacionId) {
+          const delegacionId = Number(changes.selectedDef.record.refDelegacionId);
+          setDelegacionSelect((actual) => {
+            const seleccionada = actual.optionsSrc.find((option) => Number(option.value) === delegacionId);
+            return seleccionada ? { ...actual, selected: seleccionada, selectedDef: seleccionada } : actual;
+          });
+        }
       }
 
       setSeccionalSelect((o) => ({ ...o, ...changes }));
@@ -419,14 +460,14 @@ const RelevamientoHandler = () => {
           ...o.query.config,
           body: {
             ...o.query.params,
-            refDelegacionId: seccionalSelect.refDelegacionId,
+            ...(seccionalSelect.refDelegacionId ? { refDelegacionId: seccionalSelect.refDelegacionId } : {}),
             pageIndex: 1,
           },
         },
       },
       onLoad,
     }));
-  }, [seccionalSelect.reload, seccionalSelect.refDelegacionId, setSeccionalesQuery]);
+  }, [ambitoSeccionalesIds, seccionalBloqueada, seccionalFijaId, seccionalSelect.reload, seccionalSelect.refDelegacionId, setSeccionalesQuery]);
 
   // Al cambiar delegación, preparo carga de seccionales
   useEffect(() => {
@@ -815,8 +856,8 @@ const RelevamientoHandler = () => {
     const delegSel = delegacionSelect.selected;
     const seccSel = seccionalSelect.selected;
 
-    const delegId = delegSel && delegSel !== delegacionSelectDef ? Number(delegSel.value) : null;
-    const seccId = seccSel && seccSel !== seccionalSelectDef ? Number(seccSel.value) : null;
+    const delegId = delegacionFijaId ?? (delegSel && delegSel !== delegacionSelectDef ? Number(delegSel.value) : null);
+    const seccId = seccionalFijaId ?? (seccSel && seccSel !== seccionalSelectDef ? Number(seccSel.value) : null);
 
     if (delegId != null) params.delegacionId = delegId;
     if (seccId != null) params.seccionalId = seccId;
@@ -834,21 +875,23 @@ const RelevamientoHandler = () => {
   };
 
   const onLimpiaFiltros = () => {
+    const delegacionId = delegacionFijaId || 0;
     setDelegacionSelect((o) => ({ ...o, selected: o.selectedDef }));
     setSeccionalSelect((o) => ({
       ...o,
       selected: o.selectedDef,
-      refDelegacionId: 0,
-      optionsSrc: [],
-      options: [],
-      data: [],
+      refDelegacionId: delegacionId || 0,
+      reload: Boolean(delegacionId),
     }));
     setEmpleadorUI("");
     setFechaDesde(null);
     setFechaHasta(null);
 
     relevamientoChanger("list", {
-      params: {},
+      params: {
+        ...(delegacionFijaId ? { delegacionId: delegacionFijaId } : {}),
+        ...(seccionalFijaId ? { seccionalId: seccionalFijaId } : {}),
+      },
       replaceParams: true,
       pagination: { index: 1, size: 10 },
       onLoadSelect: onLoadSelectKeepOrFirst,
@@ -894,6 +937,7 @@ const RelevamientoHandler = () => {
             error={!!delegacionSelect.error}
             helperText={delegacionSelect.loading ?? delegacionSelect?.error}
             value={delegacionSelect.selected}
+            disabled={delegacionBloqueada}
             onChange={(selected) => setDelegacionSelect((o) => ({ ...o, selected, buscar: "", options: o.optionsSrc }))}
             options={delegacionSelect.optionsSrc}
             onTextChange={(buscar) => setDelegacionSelect((o) => ({ ...o, buscar }))}
@@ -906,6 +950,7 @@ const RelevamientoHandler = () => {
             error={!!seccionalSelect.error}
             helperText={seccionalSelect.loading ?? seccionalSelect?.error}
             value={seccionalSelect.selected}
+            disabled={seccionalBloqueada}
             onChange={(selected) => setSeccionalSelect((o) => ({ ...o, selected }))}
             options={seccionalSelect.optionsSrc}
             onTextChange={(buscar) => setSeccionalSelect((o) => ({ ...o, buscar }))}

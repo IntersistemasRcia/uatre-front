@@ -14,6 +14,16 @@ export const destinosEstado = (estado, huboAcuerdo = null) => ({
 }[estado] || []);
 
 const primerValorInformado = (...valores) => valores.find((valor) => valor != null && valor !== "") ?? null;
+const normalizarSiNo = (valor) => {
+  if (valor == null || valor === "") return null;
+  if (valor === true || ["S", "SI", "SÍ", "TRUE", "1"].includes(String(valor).trim().toUpperCase())) return "S";
+  if (valor === false || ["N", "NO", "FALSE", "0"].includes(String(valor).trim().toUpperCase())) return "N";
+  return valor;
+};
+const normalizarTipoGas = (valor) => {
+  if (valor == null || valor === "") return null;
+  return ["X", "GARRAFA"].includes(String(valor).trim().toUpperCase()) ? "X" : "R";
+};
 
 const adaptarTrabajador = (trabajador) => ({
   ...trabajador,
@@ -28,27 +38,14 @@ export const adaptarGestionRelevamiento = (gestion, trabajadores = null) => {
   const establecimiento = relevamiento.establecimiento || {};
   if (Array.isArray(trabajadores)) relevamiento.trabajadores = trabajadores;
   const trabajadoresAdaptados = (relevamiento.trabajadores || []).map(adaptarTrabajador);
-  const seguimientoNovedades = (gestion?.seguimientos || []).flatMap((seguimiento) => [
-    ...(seguimiento.observaciones || []).map((observacion) => ({
-      id: `legado-observacion-${observacion.id}`,
-      tipo: "Observacion",
-      detalle: observacion.texto,
-      fecha: observacion.creadoUtc,
-      usuario: observacion.usuario,
-    })),
-    ...(seguimiento.documentos || []).map((documento) => ({
-      id: `legado-documento-${documento.id}`,
-      tipo: "Documento",
-      detalle: documento.observaciones,
-      nombreArchivo: documento.nombreArchivo,
-      tipoDocumental: documento.tipoDocumental,
-      fecha: documento.fechaUtc,
-      usuario: documento.usuario,
-    })),
-  ]);
-  const novedades = [...(gestion?.novedades || []), ...seguimientoNovedades]
-    .reduce((items, item) => (items.some((actual) => actual.id === item.id) ? items : [...items, item]), [])
-    .sort((first, second) => Date.parse(second.fechaUtc || second.fecha || 0) - Date.parse(first.fechaUtc || first.fecha || 0));
+  const fechaOrden = (item) => {
+    const valor = Date.parse(item?.fechaUtc || item?.fecha || "");
+    return Number.isFinite(valor) ? valor : Number.NEGATIVE_INFINITY;
+  };
+  // La API ya entrega una proyección completa y trazable de Novedades. Volver a
+  // construir documentos desde seguimientos elimina su estado y genera duplicados.
+  const novedades = [...(gestion?.novedades || [])]
+    .sort((first, second) => fechaOrden(second) - fechaOrden(first) || String(second.id || "").localeCompare(String(first.id || "")));
 
   return {
     ...relevamiento,
@@ -76,16 +73,17 @@ export const adaptarGestionRelevamiento = (gestion, trabajadores = null) => {
       botiquin: relevamiento.establecimientoBotiquin ?? null,
       banos: relevamiento.establecimientoBanos ?? null,
       banosUbicacion: relevamiento.establecimientoBanosUbicacion ?? null,
-      accesibilidad: primerValorInformado(
+      accesibilidad: normalizarSiNo(primerValorInformado(
         relevamiento.establecimientoAccesibilidad,
         relevamiento.accesibilidad,
         establecimiento.accesibilidad,
-      ),
+        relevamiento.establecimientoAreaDescansoEquipada,
+      )),
       areaDescansoEquipada: relevamiento.establecimientoAreaDescansoEquipada ?? null,
       serviciosElectricidad: relevamiento.establecimientoServiciosElectricidad ?? null,
       serviciosElectricidadTipo: relevamiento.establecimientoServiciosElectricidadTipo ?? null,
       serviciosGas: relevamiento.establecimientoServiciosGas ?? null,
-      serviciosGasTipo: relevamiento.establecimientoServiciosGasTipo ?? null,
+      serviciosGasTipo: normalizarTipoGas(relevamiento.establecimientoServiciosGasTipo),
       serviciosAguaPotable: relevamiento.establecimientoServiciosAguaPotable ?? null,
       serviciosAguaPotableTipo: relevamiento.establecimientoServiciosAguaPotableTipo ?? null,
       serviciosInternet: relevamiento.establecimientoServiciosInternet ?? null,
