@@ -59,7 +59,7 @@ const RelevamientoDetails = (props) => {
 									<InputMaterial label="DE RENATRE Apellido y Nombre" width="15rem" value={validar(data.inspectorRenatre)}/>
 									<InputMaterial label="Dni" width="10rem" value={validar(Formato.DNI(data.inspectorRenatreDNI))} />
 									{/* <InputMaterial label="Fecha de carga" width="8rem" value={validar(data.createdDate)}/> */}
-									<InputMaterial label="DE UATRE Apellido y Nombre" width="15rem" value={validar(!data.inspectorApellidoUATRE ? "-" : data.inspectorApellidoUATRE)}/>
+									<InputMaterial label="DE UATRE Apellido y Nombre" width="15rem" value={validar(!data.inspector ? "-" : data.inspector)}/>
 									<Grid grow><InputMaterial label="Dni"  width="10rem" value={validar(Formato.DNI(data.inspectorDNI))}/></Grid>
 									<Grid grow><InputMaterial label="Cargo"  width="10rem" value={cargoInspector(data.inspectorCargo)}/></Grid>
 									
