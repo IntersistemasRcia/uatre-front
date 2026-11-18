@@ -580,15 +580,14 @@ const RelevamientoHandler = () => {
     }
   }, [gestiones, relevamientoSelected, requestGestion]);
 
-  const guardarDatosPrincipales = useCallback(async (editado) => {
+  const guardarCambiosRelevamiento = useCallback(async (editado, gestion = {}) => {
     if (!relevamientoSelected) throw new Error("Seleccioná un relevamiento.");
     const gestionActual = await obtenerGestion(relevamientoSelected.id, relevamientoSelected);
     if (!gestionActual.version) {
       throw new Error("No se pudo obtener una versión vigente del relevamiento. Recargá los datos e intentá nuevamente.");
     }
-    const establecimiento = editado.establecimiento || {};
-    return operarGestion("ACTUALIZAR_DATOS_PRINCIPALES", {
-      datosPrincipales: {
+    const establecimiento = editado?.establecimiento || {};
+    const datosPrincipales = editado ? {
         ...seleccionarCampos(editado, camposRelevamientoEditables),
           actaNro: entero(editado.actaNro),
           localidadesId: entero(editado.localidadesId),
@@ -622,7 +621,10 @@ const RelevamientoHandler = () => {
           establecimientoServiciosAguaPotable: establecimiento.serviciosAguaPotable || null,
           establecimientoServiciosAguaPotableTipo: establecimiento.serviciosAguaPotableTipo || null,
           establecimientoServiciosInternet: establecimiento.serviciosInternet || null,
-      },
+      } : null;
+    return operarGestion("GUARDAR_CAMBIOS_RELEVAMIENTO", {
+      ...gestion,
+      datosPrincipales,
     }, gestionActual.version);
   }, [obtenerGestion, operarGestion, relevamientoSelected]);
 
@@ -716,12 +718,14 @@ const RelevamientoHandler = () => {
   const encuestaActions = useMemo(() => {
     const createAction = ({ action, onExecute, ...props }) => new Action({ name: action, onExecute, combination: "AltKey", ...props });
     const descripcion = relevamientoSelected?.id || "";
+    const estadoSeleccionado = gestiones[relevamientoSelected?.id]?.estado || relevamientoSelected?.estadoRelevamiento || relevamientoSelected?.estado;
+    const relevamientoFinalizado = estadoSeleccionado === ESTADOS_RELEVAMIENTO.FINALIZADA;
     return [
       createAction({ action: `Consulta Relevamiento nro. ${descripcion}`, onExecute: () => abrirSeguimiento("view"), keys: "o", underlineindex: 1, disabled: !relevamientoSelected || !puedeConsultar }),
-      createAction({ action: `Modifica Relevamiento nro. ${descripcion}`, onExecute: () => abrirSeguimiento("modify"), keys: "m", underlineindex: 0, disabled: !relevamientoSelected || !puedeModificar }),
+      createAction({ action: `Modifica Relevamiento nro. ${descripcion}`, onExecute: () => abrirSeguimiento("modify"), keys: "m", underlineindex: 0, disabled: !relevamientoSelected || !puedeModificar || relevamientoFinalizado }),
       createAction({ action: "Imprime", onExecute: onCargaPDF, keys: "i", underlineindex: 0, disabled: !relevamientoSelected || !!pdf.loading }),
     ];
-  }, [abrirSeguimiento, onCargaPDF, pdf.loading, puedeConsultar, puedeModificar, relevamientoSelected]);
+  }, [abrirSeguimiento, gestiones, onCargaPDF, pdf.loading, puedeConsultar, puedeModificar, relevamientoSelected]);
 
   tabs.push({
     header: () => <Tab label="RELEVAMIENTOS" />,
@@ -967,7 +971,7 @@ const RelevamientoHandler = () => {
           onClose={() => setModalMode(null)}
           onOperation={operarGestion}
           onSave={guardarGestion}
-          onSaveData={guardarDatosPrincipales}
+          onSaveData={guardarCambiosRelevamiento}
           onSaveWorker={guardarTrabajador}
           onDownloadDocument={descargarDocumento}
           catalogos={catalogosEdicion}
