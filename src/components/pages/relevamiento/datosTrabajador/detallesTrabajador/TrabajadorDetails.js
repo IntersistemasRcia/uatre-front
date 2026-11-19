@@ -14,6 +14,15 @@ const TrabajadorDetails = (props) => {
 	const data = config.data ?? {};
 	const tab = config.tab ?? 0;
 	const [hotField, setHotField] = useState();
+	const viveEnElLugar = String(data.viveEnElLugar ?? "").trim().toUpperCase() === "S";
+	const condicionHabitacional = (value) => viveEnElLugar ? value : "";
+	const respuestaHabitacionalSiNo = (value) => {
+		const codigo = String(value ?? "").trim().toUpperCase();
+		if (codigo === "S") return "SI";
+		if (codigo === "N") return "NO";
+		return "";
+	};
+	const estadoVivienda = (value) => ({ B: "BUENA", M: "MALA", A: "ACEPTABLE" }[String(value ?? "").trim().toUpperCase()] ?? "");
 
 
 	const _ = require('lodash');
@@ -60,7 +69,7 @@ const TrabajadorDetails = (props) => {
 									<InputMaterial label="Indumentaria"  value={validar(String(data.indumentariaTrab ?? "").toUpperCase() === "S" ? "SI" : "NO")}/> 
 									{/* <InputMaterial label="Fecha de carga" width="8rem" value={validar(data.createdDate)}/> */}
 									<InputMaterial label="Jornada Horario"  value={validar(data.jornadaHorarioDescripcion)}/>
-									<InputMaterial label="Observaciones"   value={validar(!data.observacionCondicionLaboral ? "-" : data.observacionCondicionLaboral)}/>
+									<InputMaterial label="Observaciones" value={validar(data.observacionesCondicionLaboral ?? data.observacionCondicionLaboral ?? "-")}/>
 
 								</Grid>		
 							</Grid>
@@ -75,12 +84,12 @@ const TrabajadorDetails = (props) => {
 							<Grid className={styles.contenido} gap="1rem"> 
 								<Grid width> 
 									<InputMaterial label="¿Vive en el lugar?" value={validar(respuestaSiNo(data.viveEnElLugar))}/>
-									<InputMaterial label="EstadoVivienda"  value={validar(String(data.estadoVivienda ?? "").toUpperCase() === "B" ? "BUENA" : String(data.estadoVivienda ?? "").toUpperCase() === "M" ? "MALA" : "ACEPTABLE")}/>
-									<InputMaterial label="CantidadIntegrantes"  value={validar(data.cantidadIntegrantesVivienda)}/>
-									<InputMaterial label="Electricidad"  value={validar(String(data.serviciosElectricidad ?? "").toUpperCase() === "S" ? "SI" : "NO")}/>
-									<InputMaterial label="Gas"  value={validar(String(data.serviciosGas ?? "").toUpperCase() === "S" ? "SI" : "NO")}/>
-									<InputMaterial label="Agua Potable"  value={validar(String(data.serviciosAguaPotable ?? "").toUpperCase() === "S" ? "SI" : "NO")}/>
-									<InputMaterial label="Internet"   value={validar(String(data.serviciosInternet ?? "").toUpperCase() === "S" ? "SI" : "NO")}/>
+									<InputMaterial label="EstadoVivienda" value={validar(condicionHabitacional(estadoVivienda(data.estadoVivienda)))}/>
+									<InputMaterial label="CantidadIntegrantes" value={validar(condicionHabitacional(data.cantidadIntegrantesVivienda))}/>
+									<InputMaterial label="Electricidad" value={validar(condicionHabitacional(respuestaHabitacionalSiNo(data.serviciosElectricidad)))}/>
+									<InputMaterial label="Gas" value={validar(condicionHabitacional(respuestaHabitacionalSiNo(data.serviciosGas)))}/>
+									<InputMaterial label="Agua Potable" value={validar(condicionHabitacional(respuestaHabitacionalSiNo(data.serviciosAguaPotable)))}/>
+									<InputMaterial label="Internet" value={validar(condicionHabitacional(respuestaHabitacionalSiNo(data.serviciosInternet)))}/>
 								</Grid>
 							</Grid>
 
@@ -89,7 +98,7 @@ const TrabajadorDetails = (props) => {
 							<Grid width>
 							<InputMaterial 
 								label="Pareja" 
-								value={
+								value={condicionHabitacional(
 									(() => {
 										if (String(data.pareja ?? "").toUpperCase() === "S") {
 											if (String(data.parejaTrabaja ?? "").toUpperCase() === "S") {
@@ -101,12 +110,12 @@ const TrabajadorDetails = (props) => {
 											return validar("NO");
 										}
 									})()
-								}
-								title={`${String(data.pareja ?? "").toUpperCase() === "S" ? "SI" : "NO"} - ${String(data.pareja ?? "").toUpperCase() === "S" ? (String(data.parejaTrabaja ?? "").toUpperCase() === "S" ? "Trabaja (SI) - Permite la opción de ir a identificar y condición laboral de pareja" : "Trabaja (NO)") : ""}`}
+								)}
+								title={viveEnElLugar ? `${String(data.pareja ?? "").toUpperCase() === "S" ? "SI" : "NO"} - ${String(data.pareja ?? "").toUpperCase() === "S" ? (String(data.parejaTrabaja ?? "").toUpperCase() === "S" ? "Trabaja (SI) - Permite la opción de ir a identificar y condición laboral de pareja" : "Trabaja (NO)") : ""}` : ""}
 							/>
 									<InputMaterial 
 										label="Hijos" 
-										value={
+									value={condicionHabitacional(
 											(() => {
 												let texto = "";
 												
@@ -137,8 +146,8 @@ const TrabajadorDetails = (props) => {
 											
 										return validar(texto);
 										})()
-									}
-									title={
+									)}
+									title={viveEnElLugar ?
 											(() => {
 												let texto = "";
 												
@@ -167,10 +176,9 @@ const TrabajadorDetails = (props) => {
 												}
 												
 												return texto;
-										})()
-								}
+										})() : ""}
 							/>
-							<InputMaterial label="Observaciones"   value={validar(!data.observacionesCondicionHabitacional ? "-" : data.observacionesCondicionHabitacional)}/>
+								<InputMaterial label="Observaciones" value={validar(condicionHabitacional(data.observacionesCondicionHabitacional || ""))}/>
 							</Grid>
 						</Grid>
 					</Grid>					</Grid>

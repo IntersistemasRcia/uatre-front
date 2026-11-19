@@ -90,12 +90,17 @@ const styles = StyleSheet.create({
 	},
 });
 
-const DetalleItem = ({ label, value }) => (
+const DetalleItem = ({ label, value, emptyValue = "-" }) => (
 	<View style={styles.detalleRow}>
 		<Text style={styles.detalleLabel}>{label}:</Text>
-		<Text style={styles.detalleValue}>{value || "-"}</Text>
+		<Text style={styles.detalleValue}>{value == null || value === "" ? emptyValue : value}</Text>
 	</View>
 );
+
+const esSi = (value) => String(value ?? "").trim().toUpperCase() === "S";
+const siNo = (value) => esSi(value) ? "SI" : String(value ?? "").trim().toUpperCase() === "N" ? "NO" : null;
+const estadoVivienda = (value) => ({ B: "BUENA", M: "MALA", A: "ACEPTABLE" }[String(value ?? "").trim().toUpperCase()] ?? null);
+const valorHabitacional = (item, value) => esSi(item.viveEnElLugar) ? value : null;
 
 const PDF = ({ data = [], filtros = {} }) => {
 	const now = new Date();
@@ -176,24 +181,24 @@ const PDF = ({ data = [], filtros = {} }) => {
 						<DetalleItem label="Equipamiento" value={item.equipamiento === "S" ? "SI" : "NO"} />
 						<DetalleItem label="Indumentaria" value={item.indumentariaTrab === "S" ? "SI" : "NO"} />
 						<DetalleItem label="Jornada Horario" value={item.jornadaHorarioDescripcion} />
-						<DetalleItem label="Observaciones" value={item.observacionCondicionLaboral} />
+						<DetalleItem label="Observaciones" value={item.observacionesCondicionLaboral ?? item.observacionCondicionLaboral} />
 						
 						{/* Condiciones Habitacionales */}
 						<Text style={styles.seccionTitulo}>CONDICIONES HABITACIONALES DEL TRABAJADOR</Text>
 						<DetalleItem label="¿Vive en el lugar?" value={respuestaSiNo(item.viveEnElLugar)} />
-						<DetalleItem label="Estado Vivienda" value={item.estadoVivienda === "B" ? "BUENA" : item.estadoVivienda === "M" ? "MALA" : "ACEPTABLE"} />
-						<DetalleItem label="Cantidad Integrantes" value={item.cantidadIntegrantesVivienda} />
-						<DetalleItem label="Electricidad" value={item.serviciosElectricidad === "S" ? "SI" : "NO"} />
-						<DetalleItem label="Gas" value={item.serviciosGas === "S" ? "SI" : "NO"} />
-						<DetalleItem label="Agua Potable" value={item.serviciosAguaPotable === "S" ? "SI" : "NO"} />
-						<DetalleItem label="Internet" value={item.serviciosInternet === "S" ? "SI" : "NO"} />
-						<DetalleItem label="Pareja" value={item.pareja === "s" ? "SI" : "NO"} />
-						<DetalleItem label="Pareja Trabaja" value={item.parejaTrabaja === "s" ? "SI" : item.pareja === "s" ? "NO" : "-"} />
-						<DetalleItem label="Hijos" value={item.hijos === "s" ? "SI" : "NO"} />
-						<DetalleItem label="Hijos Mayores" value={item.hijosMayores === "s" ? "SI" : item.hijos === "s" ? "NO" : "-"} />
-						<DetalleItem label="Hijos Mayores Trabajan" value={item.hijosMayoresTrabajan === "s" ? "SI" : item.hijosMayores === "s" ? "NO" : "-"} />
-						<DetalleItem label="Hijos Menores Escolarizados" value={item.hijosMenoresEscolarizados === "s" ? "SI" : "-"} />
-						<DetalleItem label="Observaciones" value={item.observacionesCondicionHabitacional} />
+						<DetalleItem label="Estado Vivienda" value={valorHabitacional(item, estadoVivienda(item.estadoVivienda))} emptyValue="" />
+						<DetalleItem label="Cantidad Integrantes" value={valorHabitacional(item, item.cantidadIntegrantesVivienda)} emptyValue="" />
+						<DetalleItem label="Electricidad" value={valorHabitacional(item, siNo(item.serviciosElectricidad))} emptyValue="" />
+						<DetalleItem label="Gas" value={valorHabitacional(item, siNo(item.serviciosGas))} emptyValue="" />
+						<DetalleItem label="Agua Potable" value={valorHabitacional(item, siNo(item.serviciosAguaPotable))} emptyValue="" />
+						<DetalleItem label="Internet" value={valorHabitacional(item, siNo(item.serviciosInternet))} emptyValue="" />
+						<DetalleItem label="Pareja" value={valorHabitacional(item, siNo(item.pareja))} emptyValue="" />
+						<DetalleItem label="Pareja Trabaja" value={valorHabitacional(item, siNo(item.parejaTrabaja))} emptyValue="" />
+						<DetalleItem label="Hijos" value={valorHabitacional(item, siNo(item.hijos))} emptyValue="" />
+						<DetalleItem label="Hijos Mayores" value={valorHabitacional(item, siNo(item.hijosMayores))} emptyValue="" />
+						<DetalleItem label="Hijos Mayores Trabajan" value={valorHabitacional(item, siNo(item.hijosMayoresTrabajan))} emptyValue="" />
+						<DetalleItem label="Hijos Menores Escolarizados" value={valorHabitacional(item, siNo(item.hijosMenoresEscolarizados))} emptyValue="" />
+						<DetalleItem label="Observaciones" value={valorHabitacional(item, item.observacionesCondicionHabitacional)} emptyValue="" />
 					</View>
 				))}
 
