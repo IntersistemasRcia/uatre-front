@@ -35,7 +35,6 @@ const adaptarTrabajador = (trabajador) => ({
 
 export const adaptarGestionRelevamiento = (gestion, trabajadores = null) => {
   const relevamiento = { ...(gestion?.relevamiento || {}) };
-  const establecimiento = relevamiento.establecimiento || {};
   if (Array.isArray(trabajadores)) relevamiento.trabajadores = trabajadores;
   const trabajadoresAdaptados = (relevamiento.trabajadores || []).map(adaptarTrabajador);
   const fechaOrden = (item) => {
@@ -73,12 +72,7 @@ export const adaptarGestionRelevamiento = (gestion, trabajadores = null) => {
       botiquin: relevamiento.establecimientoBotiquin ?? null,
       banos: relevamiento.establecimientoBanos ?? null,
       banosUbicacion: relevamiento.establecimientoBanosUbicacion ?? null,
-      accesibilidad: normalizarSiNo(primerValorInformado(
-        relevamiento.establecimientoAccesibilidad,
-        relevamiento.accesibilidad,
-        establecimiento.accesibilidad,
-        relevamiento.establecimientoAreaDescansoEquipada,
-      )),
+      accesibilidad: normalizarSiNo(relevamiento.establecimientoAreaDescansoEquipada),
       areaDescansoEquipada: relevamiento.establecimientoAreaDescansoEquipada ?? null,
       serviciosElectricidad: relevamiento.establecimientoServiciosElectricidad ?? null,
       serviciosElectricidadTipo: relevamiento.establecimientoServiciosElectricidadTipo ?? null,

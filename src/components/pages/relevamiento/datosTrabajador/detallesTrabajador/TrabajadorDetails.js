@@ -178,7 +178,7 @@ const TrabajadorDetails = (props) => {
 												return texto;
 										})() : ""}
 							/>
-								<InputMaterial label="Observaciones" value={validar(condicionHabitacional(data.observacionesCondicionHabitacional || ""))}/>
+								<InputMaterial label="Observaciones" value={validar(data.observacionesCondicionHabitacional || "")}/>
 							</Grid>
 						</Grid>
 					</Grid>					</Grid>

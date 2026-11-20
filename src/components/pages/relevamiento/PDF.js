@@ -1,7 +1,7 @@
 import React from "react";
 import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
 import Formato from "components/helpers/Formato";
-import { cargoInspector, respuestaSiNo } from "./relevamientoFormatters";
+import { cargoInspector, respuestaAccesibilidad, respuestaSiNo } from "./relevamientoFormatters";
 
 // Estilos para el PDF
 const styles = StyleSheet.create({
@@ -168,7 +168,7 @@ const PDF = ({ data = [], filtros = {} }) => {
 						<DetalleItem label="Localidad" value={item.establecimientoLocalidad} />
 						<DetalleItem label="Botiquín" value={item.establecimientoBotiquin === "S" ? "SI" : "NO"} />
 						<DetalleItem label="Baños" value={item.establecimientoBanos === "S" ? `SI - ${item.establecimientoBanosUbicacion === "A" ? "Afuera" : "Adentro"}` : "NO"} />
-						<DetalleItem label="Área Descanso" value={item.establecimientoAreaDescansoEquipada === "S" ? "SI" : "NO"} />
+						<DetalleItem label="Accesibilidad" value={respuestaAccesibilidad(item.establecimientoAreaDescansoEquipada)} />
 						<DetalleItem label="Electricidad" value={item.establecimientoServiciosElectricidad === "S" ? `SI - ${item.establecimientoServiciosElectricidadTipo === "S" ? "Genset" : "De red"}` : "NO"} />
 						<DetalleItem label="Gas" value={`${item.establecimientoServiciosGas === "S" ? "SI" : "NO"} - ${item.establecimientoServiciosGasTipo === "X" ? "Garrafa" : "De red"}`} />
 						<DetalleItem label="Agua Potable" value={item.establecimientoServiciosAguaPotable === "S" ? "SI" : "NO"} />
@@ -198,7 +198,7 @@ const PDF = ({ data = [], filtros = {} }) => {
 						<DetalleItem label="Hijos Mayores" value={valorHabitacional(item, siNo(item.hijosMayores))} emptyValue="" />
 						<DetalleItem label="Hijos Mayores Trabajan" value={valorHabitacional(item, siNo(item.hijosMayoresTrabajan))} emptyValue="" />
 						<DetalleItem label="Hijos Menores Escolarizados" value={valorHabitacional(item, siNo(item.hijosMenoresEscolarizados))} emptyValue="" />
-						<DetalleItem label="Observaciones" value={valorHabitacional(item, item.observacionesCondicionHabitacional)} emptyValue="" />
+						<DetalleItem label="Observaciones" value={item.observacionesCondicionHabitacional} emptyValue="" />
 					</View>
 				))}
 
