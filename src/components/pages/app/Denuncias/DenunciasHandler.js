@@ -805,12 +805,12 @@ const DenunciasHandler = () => {
     return Array.from(map.values());
   }, [seccionalSelect.data]);
 
-  // Búsqueda y filtrado de Localidad por Delegación y/o Seccional (histórico).
+  // Búsqueda y filtrado de Localidad por Delegación y/o Seccional de denuncia.
   // Búsqueda por nombre O por Código Postal (RN-003).
   useEffect(() => {
     let base = localidadCatalog;
-    const delegId = delegacionSelect.selected?.value;
-    const seccId = seccionalSelect.selected?.value;
+    const delegId = delegacionOrigenSelect.selected?.value;
+    const seccId = seccionalOrigenSelect.selected?.value;
     if (delegId) base = base.filter(opt => opt.record?.delegacionIds?.has(Number(delegId)));
     if (seccId) base = base.filter(opt => opt.record?.seccionalIds?.has(Number(seccId)));
     const buscar = localidadSelect.buscar.trim().toLowerCase();
@@ -822,15 +822,15 @@ const DenunciasHandler = () => {
     }
     const options = [localidadTodos, ...base];
     setLocalidadSelect(o => ({ ...o, options }));
-  }, [localidadCatalog, localidadSelect.buscar, delegacionSelect.selected, seccionalSelect.selected, localidadTodos]);
+  }, [localidadCatalog, localidadSelect.buscar, delegacionOrigenSelect.selected, seccionalOrigenSelect.selected, localidadTodos]);
 
-  // RN-005/EX-003: al cambiar Delegación o Seccional (histórico), Localidad
+  // RN-005/EX-003: al cambiar Delegación o Seccional de denuncia, Localidad
   // vuelve siempre a "Todas las Localidades" — a diferencia del patrón de
   // Seccional-por-Delegación, acá NO se mantiene la selección aunque siga siendo válida.
   useEffect(() => {
     setLocalidadSelect(o => ({ ...o, selected: localidadTodos, buscar: "" }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [delegacionSelect.selected?.value, seccionalSelect.selected?.value]);
+  }, [delegacionOrigenSelect.selected?.value, seccionalOrigenSelect.selected?.value]);
 
   // ==============================
   // Exportar a Excel
@@ -909,7 +909,7 @@ const DenunciasHandler = () => {
       ? filtroSeccionalValue
       : null;
 
-  // Bloqueo por ámbito del usuario
+  // Bloqueo por ámbito del usuario y por la jerarquía elegida en "Derivado A".
   const bloquearDelegacion = !!usuarioSeccionalId || !!usuarioDelegacionId;
   const bloquearSeccional = !!usuarioSeccionalId;
 
@@ -917,39 +917,20 @@ const DenunciasHandler = () => {
 
   // Estados de disabled para aplicar opacidad visual
   const disabledDerivadoA = bloquearDerivadoA;
-  const disabledDelegacion = bloquearDelegacion;
-  const disabledSeccional = bloquearSeccional;
+  const disabledDelegacion = bloquearDelegacion || !["Delegacion", "Seccional"].includes(filtroDerivadoATipoValue);
+  const disabledSeccional = bloquearSeccional || (
+    filtroDerivadoATipoValue !== "Seccional" &&
+    !(filtroDerivadoATipoValue === "Delegacion" && filtroDelegacionValue)
+  );
 
   const handleDelegacionChange = useCallback((selected = delegacionTodos) => {
     setDelegacionSelect((o) => ({ ...o, selected }));
-
-    if (selected?.value) {
-      const derivadoDelegacion = derivadoATipoSelect.data.find((r) => r.value === "Delegacion") || derivadoATipoTodos;
-      setDerivadoATipoSelect((o) => ({ ...o, selected: derivadoDelegacion }));
-      setSeccionalSelect((o) => ({ ...o, selected: seccionalTodos }));
-    } else if (derivadoATipoSelect.selected?.value === "Delegacion") {
-      setDerivadoATipoSelect((o) => ({ ...o, selected: derivadoATipoTodos }));
-    }
-  }, [delegacionTodos, derivadoATipoSelect.data, derivadoATipoSelect.selected?.value, derivadoATipoTodos, seccionalTodos]);
+    setSeccionalSelect((o) => ({ ...o, selected: seccionalTodos, buscar: "" }));
+  }, [delegacionTodos, seccionalTodos]);
 
   const handleSeccionalChange = useCallback((selected = seccionalTodos) => {
     setSeccionalSelect((o) => ({ ...o, selected }));
-
-    if (selected?.value) {
-      const derivadoSeccional = derivadoATipoSelect.data.find((r) => r.value === "Seccional") || derivadoATipoTodos;
-      setDerivadoATipoSelect((o) => ({ ...o, selected: derivadoSeccional }));
-
-      const delegacionId = Number(selected.record?.refDelegacionId);
-      if (delegacionId) {
-        const delegacionRelacionada = delegacionSelect.data.find((r) => Number(r.value) === delegacionId);
-        if (delegacionRelacionada) {
-          setDelegacionSelect((o) => ({ ...o, selected: delegacionRelacionada }));
-        }
-      }
-    } else if (derivadoATipoSelect.selected?.value === "Seccional") {
-      setDerivadoATipoSelect((o) => ({ ...o, selected: derivadoATipoTodos }));
-    }
-  }, [delegacionSelect.data, derivadoATipoSelect.data, derivadoATipoSelect.selected?.value, derivadoATipoTodos, seccionalTodos]);
+  }, [seccionalTodos]);
 
   const {
     render: denunciaRender,
@@ -1120,9 +1101,8 @@ const DenunciasHandler = () => {
               setEstadoSelect((o) => ({ ...o, selected, origen: "option" }));
             }}
             options={estadoSelect.options}
-            onTextChange={() => {}}
+            onTextChange={(buscar) => setEstadoSelect((o) => ({ ...o, buscar }))}
             freeSolo={false}
-            inputReadOnly={true}
           />
 
           <SearchSelectMaterial
@@ -1134,9 +1114,8 @@ const DenunciasHandler = () => {
               setTipoIngresoSelect((o) => ({ ...o, selected }));
             }}
             options={tipoIngresoSelect.options}
-            onTextChange={() => {}}
+            onTextChange={(buscar) => setTipoIngresoSelect((o) => ({ ...o, buscar }))}
             freeSolo={false}
-            inputReadOnly={true}
           />
           <SearchSelectMaterial
             label="Situación"
@@ -1147,79 +1126,13 @@ const DenunciasHandler = () => {
               setSituacionSelect((o) => ({ ...o, selected }));
             }}
             options={situacionSelect.options}
-            onTextChange={() => {}}
+            onTextChange={(buscar) => setSituacionSelect((o) => ({ ...o, buscar }))}
             freeSolo={false}
-            inputReadOnly={true}
           />
 
         </Grid>
 
-        {/* Filtros por Tipo de Ingreso y Situación */}
-        <Grid grid="auto / 1fr 1fr 1fr 1fr 1fr 150px 150px" gap="inherit">
-
-          <SearchSelectMaterial
-            label="Derivado A"
-            error={!!derivadoATipoSelect.error}
-            helperText={derivadoATipoSelect.error || undefined}
-            value={derivadoATipoSelect.selected}
-            onChange={(selected = derivadoATipoTodos) => {
-              setDerivadoATipoSelect((o) => ({ ...o, selected }));
-              if (selected?.value !== 'Delegacion' && selected?.value !== 'Seccional') {
-                // No resetear delegación si el usuario tiene ámbito fijo de delegación
-                if (!usuarioDelegacionId) {
-                  setDelegacionSelect(o => ({ ...o, selected: delegacionTodos }));
-                }
-              }
-              if (selected?.value !== 'Seccional') {
-                setSeccionalSelect(o => ({ ...o, selected: seccionalTodos }));
-              }
-            }}
-            options={derivadoATipoSelect.options}
-            onTextChange={() => {}}
-            freeSolo={false}
-            inputReadOnly={true}
-            disabled={disabledDerivadoA}
-            style={{ opacity: disabledDerivadoA ? 0.6 : 1 }}
-          />
-          <SearchSelectMaterial
-            label="Delegación"
-            error={!!delegacionSelect.error}
-            helperText={delegacionSelect.error || undefined}
-            value={delegacionSelect.selected}
-            onChange={handleDelegacionChange}
-            options={delegacionSelect.options}
-            onTextChange={() => {}}
-            freeSolo={false}
-            inputReadOnly={true}
-            disabled={disabledDelegacion}
-            style={{ opacity: disabledDelegacion ? 0.6 : 1 }}
-          />
-          <SearchSelectMaterial
-            label="Seccional"
-            error={!!seccionalSelect.error}
-            helperText={seccionalSelect.error || undefined}
-            value={seccionalSelect.selected}
-            onChange={handleSeccionalChange}
-            options={seccionalSelect.options}
-            onTextChange={() => {}}
-            freeSolo={false}
-            inputReadOnly={true}
-            disabled={disabledSeccional}
-            style={{ opacity: disabledSeccional ? 0.6 : 1 }}
-          />
-          <SearchSelectMaterial
-            label="Localidad"
-            value={localidadSelect.selected}
-            onChange={(selected = localidadTodos) => setLocalidadSelect(o => ({ ...o, selected }))}
-            options={localidadSelect.options}
-            onTextChange={(buscar) => setLocalidadSelect(o => ({ ...o, buscar }))}
-          />
-          <InputMaterial
-            label="Número de seguimiento"
-            type="number"
-            value={numeroSeguimiento}
-            onChange={(value) => setNumeroSeguimiento(value)}
-          />
+        <Grid grid="auto / 1fr 1fr 1fr 1fr" gap="inherit">
 
           <SearchSelectMaterial
             label="Delegación de Denuncia"
@@ -1233,6 +1146,8 @@ const DenunciasHandler = () => {
             onInputChange={(buscar, reason) => {
               if (reason === "input" || reason === "clear") {
                 setDelegacionOrigenSelect(o => ({ ...o, buscar }));
+              } else if (reason === "selectOption") {
+                setDelegacionOrigenSelect(o => ({ ...o, buscar: "" }));
               }
             }}
             autocompleteProps={{ filterOptions: (options) => options }}
@@ -1245,12 +1160,81 @@ const DenunciasHandler = () => {
             onInputChange={(buscar, reason) => {
               if (reason === "input" || reason === "clear") {
                 setSeccionalOrigenSelect(o => ({ ...o, buscar }));
+              } else if (reason === "selectOption") {
+                setSeccionalOrigenSelect(o => ({ ...o, buscar: "" }));
               }
             }}
             autocompleteProps={{ filterOptions: (options) => options }}
           />
+          <SearchSelectMaterial
+            label="Localidad"
+            value={localidadSelect.selected}
+            onChange={(selected = localidadTodos) => setLocalidadSelect(o => ({ ...o, selected }))}
+            options={localidadSelect.options}
+            onTextChange={(buscar) => setLocalidadSelect(o => ({ ...o, buscar }))}
+          />
+          <InputMaterial
+            label="Número de seguimiento"
+            type="number"
+            placeholder="0000"
+            value={numeroSeguimiento}
+            onChange={(value) => setNumeroSeguimiento(value)}
+          />
+        </Grid>
 
+        <Grid grid="auto / 1fr 1fr 1fr 1fr 1fr 150px 150px" gap="inherit">
 
+          <SearchSelectMaterial
+            label="Derivado A"
+            error={!!derivadoATipoSelect.error}
+            helperText={derivadoATipoSelect.error || undefined}
+            value={derivadoATipoSelect.selected}
+            onChange={(selected = derivadoATipoTodos) => {
+              setDerivadoATipoSelect((o) => ({ ...o, selected }));
+              if (selected?.value === "Seccional") {
+                // La delegación es opcional y, si se elige, limita las seccionales.
+                setSeccionalSelect(o => ({ ...o, selected: seccionalTodos, buscar: "" }));
+              } else if (selected?.value === "Delegacion") {
+                // Seccional se habilita recién al elegir una delegación concreta.
+                setSeccionalSelect(o => ({ ...o, selected: seccionalTodos, buscar: "" }));
+              } else {
+                // No resetear delegación si el usuario tiene ámbito fijo de delegación
+                if (!usuarioDelegacionId) {
+                  setDelegacionSelect(o => ({ ...o, selected: delegacionTodos }));
+                }
+                setSeccionalSelect(o => ({ ...o, selected: seccionalTodos }));
+              }
+            }}
+            options={derivadoATipoSelect.options}
+            onTextChange={(buscar) => setDerivadoATipoSelect((o) => ({ ...o, buscar }))}
+            freeSolo={false}
+            disabled={disabledDerivadoA}
+            style={{ opacity: disabledDerivadoA ? 0.6 : 1 }}
+          />
+          <SearchSelectMaterial
+            label="Delegación"
+            error={!!delegacionSelect.error}
+            helperText={delegacionSelect.error || undefined}
+            value={delegacionSelect.selected}
+            onChange={handleDelegacionChange}
+            options={delegacionSelect.options}
+            onTextChange={(buscar) => setDelegacionSelect((o) => ({ ...o, buscar }))}
+            freeSolo={false}
+            disabled={disabledDelegacion}
+            style={{ opacity: disabledDelegacion ? 0.6 : 1 }}
+          />
+          <SearchSelectMaterial
+            label="Seccional"
+            error={!!seccionalSelect.error}
+            helperText={seccionalSelect.error || undefined}
+            value={seccionalSelect.selected}
+            onChange={handleSeccionalChange}
+            options={seccionalSelect.options}
+            onTextChange={(buscar) => setSeccionalSelect((o) => ({ ...o, buscar }))}
+            freeSolo={false}
+            disabled={disabledSeccional}
+            style={{ opacity: disabledSeccional ? 0.6 : 1 }}
+          />
           <DateTimePicker
             type="date"
             label="Fecha Desde"
@@ -1277,14 +1261,18 @@ const DenunciasHandler = () => {
             disabled={denunciasLoading}
             onClick={() => {
               const derivadoTipoSeleccionado = derivadoATipoSelect.selected?.value || null;
+              // Una seccional concreta siempre es el destino más específico,
+              // aunque haya sido elegida desde la rama de una delegación.
               const derivadoTipo = filtroSeccionalValue
                 ? "Seccional"
-                : (usuarioDelegacionId && !derivadoTipoSeleccionado)
+                : (usuarioDelegacionId && !derivadoTipoSeleccionado
                   ? null
-                  : derivadoTipoSeleccionado;
+                  : derivadoTipoSeleccionado);
               const derivadoId = filtroSeccionalValue
                 ? filtroSeccionalValue
-                : (derivadoTipo === 'Delegacion' ? filtroDelegacionValue : null);
+                : derivadoTipo === "Delegacion"
+                  ? filtroDelegacionValue
+                  : null;
 
               setAppliedFilters({
                 estado: estadoSelect.selected?.value || null,
