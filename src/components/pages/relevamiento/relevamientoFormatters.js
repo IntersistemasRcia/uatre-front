@@ -23,4 +23,11 @@ const respuestaSiNo = (value) => {
   return String(value);
 };
 
-export { cargoInspector, respuestaSiNo };
+const respuestaAccesibilidad = (value) => {
+  const normalized = String(value ?? "").trim().toUpperCase();
+  if (normalized === "S") return "Sí";
+  if (normalized === "N") return "No";
+  return "Sin informar";
+};
+
+export { cargoInspector, respuestaSiNo, respuestaAccesibilidad };

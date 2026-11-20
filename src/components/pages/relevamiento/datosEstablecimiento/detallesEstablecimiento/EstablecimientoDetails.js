@@ -3,31 +3,10 @@ import Formato from "components/helpers/Formato";
 import Grid from "components/ui/Grid/Grid";
 import IM from "components/ui/Input/InputMaterial";
 import styles from "./EstablecimientoDetails.module.css";
+import { respuestaAccesibilidad } from "../../relevamientoFormatters";
 
 /** @type {IM} */
 const InputMaterial = (p) => <IM variant="standard" size="small" {...p} />;
-
-const valorAccesibilidad = (data) => {
-	const establecimiento = data.establecimiento ?? {};
-	const valor = [
-		data.establecimientoAccesibilidad,
-		data.accesibilidad,
-		establecimiento.accesibilidad,
-	].find((item) => item != null && item !== "");
-
-	switch (String(valor ?? "").trim().toUpperCase()) {
-		case "S":
-		case "SI":
-		case "TRUE":
-			return "SI";
-		case "N":
-		case "NO":
-		case "FALSE":
-			return "NO";
-		default:
-			return "Sin dato";
-	}
-};
 
 const EstablecimientoDetails = (props) => {
 
@@ -82,7 +61,7 @@ const EstablecimientoDetails = (props) => {
 											? `SI - ${data.establecimientoBanosUbicacion === "A" ? "Afuera" : data.establecimientoBanosUbicacion === "D" ? "Adentro" : ""}` 
 											: "NO"
 									)}/>
-									<InputMaterial label="Accesibilidad" value={valorAccesibilidad(data)}/>
+									<InputMaterial label="Accesibilidad" value={respuestaAccesibilidad(data.establecimientoAreaDescansoEquipada)}/>
 									<InputMaterial label="Electricidad"  value={validar(
 										data.establecimientoServiciosElectricidad === "S" 
 											? `SI - ${data.establecimientoServiciosElectricidadTipo === "S" ? "Genset" : data.establecimientoServiciosElectricidadTipo === "N" ? "De red" : ""}` 
